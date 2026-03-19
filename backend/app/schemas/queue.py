@@ -27,5 +27,14 @@ class QueueItemRead(BaseModel):
     completed_at: datetime | None
 
 
+class QueueItemUpdate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    activity_type: str | None = Field(default=None, alias="activityType")
+    title: str | None = None
+    description: str | None = None
+    workout_data: dict | None = Field(default=None, alias="workoutData")
+
+
 class QueueStatusUpdate(BaseModel):
     status: str

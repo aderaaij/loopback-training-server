@@ -100,6 +100,17 @@ class TrainingClient:
         """Get pending queue items."""
         return await self._request("GET", "/api/queue/pending")
 
+    async def list_queue(
+        self,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> list | dict:
+        """List queue items with optional status filter."""
+        params: dict[str, Any] = {"limit": limit}
+        if status:
+            params["status"] = status
+        return await self._request("GET", "/api/queue", params=params)
+
     async def create_queue_item(
         self,
         activity_type: str,
@@ -118,9 +129,54 @@ class TrainingClient:
             body["workoutData"] = workout_data
         return await self._request("POST", "/api/queue", json=body)
 
+    async def update_queue_item(self, item_id: str, **fields: Any) -> list | dict:
+        """Update a queue item's fields."""
+        body: dict[str, Any] = {}
+        key_map = {
+            "activity_type": "activityType",
+            "title": "title",
+            "description": "description",
+            "workout_data": "workoutData",
+        }
+        for key, value in fields.items():
+            if value is not None and key in key_map:
+                body[key_map[key]] = value
+        return await self._request("PATCH", f"/api/queue/{item_id}", json=body)
+
     async def update_queue_status(self, item_id: str, status: str) -> list | dict:
         """Update the status of a queue item."""
         return await self._request("PATCH", f"/api/queue/{item_id}/status", json={"status": status})
+
+    async def get_inventory(self) -> list | dict:
+        """Get the on-device workout inventory."""
+        return await self._request("GET", "/api/workouts/inventory")
+
+    async def get_pending_actions(self) -> list | dict:
+        """Get pending workout actions (edits/deletes)."""
+        return await self._request("GET", "/api/workouts/actions")
+
+    async def create_action(
+        self,
+        workout_id: str,
+        action: str,
+        composition: dict | None = None,
+    ) -> list | dict:
+        """Create a workout action (edit or delete)."""
+        body: dict[str, Any] = {
+            "workoutId": workout_id,
+            "action": action,
+        }
+        if composition is not None:
+            body["composition"] = composition
+        return await self._request("POST", "/api/workouts/actions", json=body)
+
+    async def create_actions_batch(self, actions: list[dict]) -> list | dict:
+        """Create multiple workout actions in one request."""
+        return await self._request("POST", "/api/workouts/actions/batch", json=actions)
+
+    async def create_queue_items_batch(self, items: list[dict]) -> list | dict:
+        """Create multiple queue items in one request."""
+        return await self._request("POST", "/api/queue/batch", json=items)
 
 
 # Singleton instance

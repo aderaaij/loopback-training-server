@@ -6,6 +6,7 @@ from datetime import date
 from fastmcp import FastMCP
 
 from app.config import settings
+from app.tools.actions import actions_router
 from app.tools.queue import queue_router
 from app.tools.workouts import workouts_router
 
@@ -36,9 +37,18 @@ mcp = FastMCP(
     - get_training_summary: Get aggregated stats grouped by week/month/year
 
     Write tools (training queue → Apple Watch):
-    - get_pending_workouts: See what workouts are queued up
+    - get_pending_workouts: See what workouts are queued up (pending only)
+    - list_queued_workouts: List all queued workouts (any status) — use this to find the UUID of a synced workout for edit/delete actions
     - create_workout: Create a structured workout composition and queue it for Apple Watch
+    - batch_create_workouts: Queue multiple workouts in one call (for full training plans)
     - update_workout_status: Change a queue item's status (pending/fetched/completed)
+
+    Action tools (edit/delete workouts already on Apple Watch):
+    - get_device_workouts: List all workouts currently on the user's Apple Watch (use to find UUIDs for edit/delete)
+    - get_pending_actions: See what edit/delete actions are pending
+    - delete_scheduled_workout: Delete a workout already synced to Apple Watch
+    - edit_scheduled_workout: Replace a workout already synced to Apple Watch with an updated version
+    - batch_actions: Create multiple edit/delete actions in one call (for bulk plan updates)
 
     Workflow for querying workout history:
     1. Determine the date range from the user's question:
@@ -50,6 +60,14 @@ mcp = FastMCP(
        get_workout_heartrate, or get_workout_activities with the workout's ID
     4. Use get_workout_activities to see the interval structure (warmup/work/rest segments)
        — this is especially useful for interval runs and structured workouts
+
+    Workflow for editing/deleting workouts already on Apple Watch:
+    1. First call get_device_workouts to see what's on the watch and find the UUID.
+    2. To delete: use delete_scheduled_workout with the workout's UUID.
+    3. To edit: use edit_scheduled_workout with the workout's UUID and the full updated composition.
+       The composition.id must match the workout_id.
+    4. Actions are applied the next time the user taps "Check for New Workouts" in the iPhone app.
+    5. Use get_pending_actions to see what actions are pending.
 
     Workflow for creating workouts:
     1. Use create_workout to build a structured workout composition. This queues it
@@ -67,6 +85,7 @@ mcp = FastMCP(
 
 mcp.mount(workouts_router)
 mcp.mount(queue_router)
+mcp.mount(actions_router)
 
 logger.info(f"Training MCP server initialized. API URL: {settings.training_api_url}")
 

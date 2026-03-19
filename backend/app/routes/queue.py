@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.database import DbSession
 from app.models.queue import WorkoutQueue
-from app.schemas.queue import QueueItemCreate, QueueItemRead, QueueStatusUpdate
+from app.schemas.queue import QueueItemCreate, QueueItemRead, QueueItemUpdate, QueueStatusUpdate
 
 router = APIRouter()
 
@@ -42,6 +42,44 @@ def create_queue_item(payload: QueueItemCreate, db: DbSession):
         workout_data=payload.workout_data,
     )
     db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@router.post("/batch", response_model=list[QueueItemRead], status_code=status.HTTP_201_CREATED)
+def create_queue_items_batch(payload: list[QueueItemCreate], db: DbSession):
+    items = []
+    for p in payload:
+        item = WorkoutQueue(
+            activity_type=p.activity_type,
+            title=p.title,
+            description=p.description,
+            workout_data=p.workout_data,
+        )
+        db.add(item)
+        items.append(item)
+    db.commit()
+    for item in items:
+        db.refresh(item)
+    return items
+
+
+@router.patch("/{item_id}", response_model=QueueItemRead)
+def update_queue_item(item_id: uuid.UUID, payload: QueueItemUpdate, db: DbSession):
+    item = db.get(WorkoutQueue, item_id)
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Queue item not found")
+
+    if payload.activity_type is not None:
+        item.activity_type = payload.activity_type
+    if payload.title is not None:
+        item.title = payload.title
+    if payload.description is not None:
+        item.description = payload.description
+    if payload.workout_data is not None:
+        item.workout_data = payload.workout_data
+
     db.commit()
     db.refresh(item)
     return item
