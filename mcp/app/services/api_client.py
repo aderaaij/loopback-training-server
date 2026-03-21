@@ -170,6 +170,59 @@ class TrainingClient:
             body["composition"] = composition
         return await self._request("POST", "/api/workouts/actions", json=body)
 
+    async def get_feedback(
+        self,
+        since: str | None = None,
+        limit: int = 20,
+        action: str | None = None,
+    ) -> list | dict:
+        """Get workout feedback entries."""
+        params: dict[str, Any] = {"limit": limit}
+        if since:
+            params["since"] = since
+        if action:
+            params["action"] = action
+        return await self._request("GET", "/api/workouts/feedback", params=params)
+
+    async def get_missed_workouts(self) -> list | dict:
+        """Get past-due incomplete workouts without feedback."""
+        # Fetch inventory and feedback, compute the difference
+        inventory = await self._request("GET", "/api/workouts/inventory")
+        feedback = await self._request("GET", "/api/workouts/feedback", params={"limit": 100})
+
+        from datetime import date, datetime
+
+        today = date.today()
+        feedback_workout_ids = set()
+        if isinstance(feedback, list):
+            for f in feedback:
+                wid = f.get("workoutId") or f.get("workout_id")
+                if wid:
+                    feedback_workout_ids.add(str(wid))
+
+        missed = []
+        if isinstance(inventory, list):
+            for item in inventory:
+                if item.get("complete"):
+                    continue
+                y, m, d = item.get("year"), item.get("month"), item.get("day")
+                if not all(v is not None for v in (y, m, d)):
+                    continue
+                scheduled = date(y, m, d)
+                if scheduled >= today:
+                    continue
+                wid = str(item.get("id", ""))
+                if wid in feedback_workout_ids:
+                    continue
+                missed.append({
+                    "workoutId": wid,
+                    "displayName": item.get("display_name", ""),
+                    "scheduledDate": scheduled.isoformat(),
+                    "daysMissed": (today - scheduled).days,
+                })
+
+        return missed
+
     async def create_actions_batch(self, actions: list[dict]) -> list | dict:
         """Create multiple workout actions in one request."""
         return await self._request("POST", "/api/workouts/actions/batch", json=actions)

@@ -9,6 +9,9 @@ Built with FastAPI, PostgreSQL, and SQLAlchemy. Includes an optional MCP (Model 
 - **Workout storage** — CRUD API for workouts with activity type, distance, duration, heart rate, splits, and arbitrary JSONB data
 - **Analytics** — Summary endpoints with aggregation by week, month, or year
 - **Training queue** — Queue structured workouts (intervals, warmup/cooldown, pace alerts) for sync to Apple Watch via an iOS companion app
+- **Workout actions** — Edit or delete workouts already synced to Apple Watch via pending action queue
+- **Device inventory** — Track what workouts are currently on the user's Apple Watch
+- **Missed workout feedback** — Record and query feedback when users miss scheduled workouts, with pattern detection for coaching
 - **MCP server** — Let AI assistants query your training data and create workouts via natural language
 
 ## Quick Start
@@ -74,6 +77,29 @@ All endpoints (except health) require a `Bearer` token in the `Authorization` he
 | `DELETE` | `/api/queue/{id}` | Delete a queue item |
 | `GET` | `/api/workouts/queue` | App-facing: get pending workouts as WorkoutKit compositions |
 | `DELETE` | `/api/workouts/queue/{id}` | App-facing: remove item after sync |
+
+### Workout Actions
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/workouts/actions` | List pending edit/delete actions |
+| `POST` | `/api/workouts/actions` | Create an edit or delete action |
+| `POST` | `/api/workouts/actions/batch` | Create multiple actions at once |
+| `DELETE` | `/api/workouts/actions/{id}` | Acknowledge a processed action |
+
+### Device Inventory
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `PUT` | `/api/workouts/inventory` | Sync full on-device workout snapshot (idempotent replace) |
+| `GET` | `/api/workouts/inventory` | Get stored inventory |
+
+### Missed Workout Feedback
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/workouts/feedback` | Record feedback for a missed workout (upsert by `workoutId`) |
+| `GET` | `/api/workouts/feedback` | Retrieve feedback history (filters: `since`, `limit`, `action`) |
 
 ## MCP Server (optional)
 

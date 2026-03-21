@@ -7,6 +7,7 @@ from fastmcp import FastMCP
 
 from app.config import settings
 from app.tools.actions import actions_router
+from app.tools.feedback import feedback_router
 from app.tools.queue import queue_router
 from app.tools.workouts import workouts_router
 
@@ -77,6 +78,22 @@ mcp = FastMCP(
        and optional alerts (pace, heart rate zone, cadence, power).
     3. Use get_pending_workouts to review what's queued and waiting to sync.
 
+    Feedback tools (missed workout feedback from iOS app):
+    - get_workout_feedback: Retrieve feedback entries for missed workouts (filter by date, action type)
+    - get_missed_workouts: Get past-due incomplete workouts that don't yet have feedback
+
+    Workflow for missed workout feedback:
+    - Query get_workout_feedback with action="adjust" to find workouts flagged for plan adjustment.
+      When found, proactively raise with the user: "Looks like you missed X and flagged it for
+      adjustment — want to figure out how to handle it?"
+    - action="move" means the user already rescheduled — no action needed, just note for patterns.
+    - action="skip" means the user chose to skip — only surface if a pattern emerges (e.g. 3+ skips
+      with reason "tired" → suggest reducing volume).
+    - dismissed=true means the user closed the prompt without responding — treat like skip with less signal.
+    - Use get_missed_workouts to find workouts that are overdue and haven't been addressed yet.
+    - During weekly reviews, look for patterns: multiple "tired" → reduce volume, multiple "busy" →
+      shift workout days, multiple "weather" → suggest indoor alternatives.
+
     Common activity types: running, cycling, swimming, walking, hiking
     Distance is in meters, duration in seconds, energy in kcal.
     Speed alerts use metersPerSecond (e.g., 4:00/km pace ≈ 4.17 m/s, 5:00/km ≈ 3.33 m/s).
@@ -86,6 +103,7 @@ mcp = FastMCP(
 mcp.mount(workouts_router)
 mcp.mount(queue_router)
 mcp.mount(actions_router)
+mcp.mount(feedback_router)
 
 logger.info(f"Training MCP server initialized. API URL: {settings.training_api_url}")
 
