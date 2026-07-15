@@ -4,6 +4,7 @@ from fastapi import APIRouter, Query
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
+from app.auth import CurrentUser
 from app.database import DbSession
 from app.models.health_metrics import DailyHealthMetrics
 from app.schemas.health_metrics import (
@@ -23,10 +24,10 @@ _METRIC_COLUMNS = [
 
 
 @router.post("", response_model=HealthMetricsBulkResponse)
-def bulk_upsert_metrics(payload: HealthMetricsBulkCreate, db: DbSession):
+def bulk_upsert_metrics(payload: HealthMetricsBulkCreate, db: DbSession, user: CurrentUser):
     upserted = 0
     for metric in payload.metrics:
-        values = {"date": metric.date}
+        values = {"user_id": user.id, "date": metric.date}
         # Only include non-null fields so we don't overwrite existing data
         set_on_conflict = {}
         for col in _METRIC_COLUMNS:
@@ -40,11 +41,11 @@ def bulk_upsert_metrics(payload: HealthMetricsBulkCreate, db: DbSession):
         stmt = insert(DailyHealthMetrics).values(**values)
         if set_on_conflict:
             stmt = stmt.on_conflict_do_update(
-                constraint="uq_daily_health_metrics_date",
+                constraint="uq_daily_health_metrics_user_date",
                 set_=set_on_conflict,
             )
         else:
-            stmt = stmt.on_conflict_do_nothing(constraint="uq_daily_health_metrics_date")
+            stmt = stmt.on_conflict_do_nothing(constraint="uq_daily_health_metrics_user_date")
 
         db.execute(stmt)
         upserted += 1
@@ -56,12 +57,13 @@ def bulk_upsert_metrics(payload: HealthMetricsBulkCreate, db: DbSession):
 @router.get("", response_model=list[HealthMetricsRead])
 def list_metrics(
     db: DbSession,
+    user: CurrentUser,
     start_date: date = Query(...),
     end_date: date | None = None,
 ):
     q = (
         select(DailyHealthMetrics)
-        .where(DailyHealthMetrics.date >= start_date)
+        .where(DailyHealthMetrics.user_id == user.id, DailyHealthMetrics.date >= start_date)
         .order_by(DailyHealthMetrics.date.desc())
     )
     if end_date:

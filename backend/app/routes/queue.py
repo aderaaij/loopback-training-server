@@ -4,9 +4,11 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
+from app.auth import CurrentUser
 from app.database import DbSession
 from app.models.queue import WorkoutQueue
 from app.schemas.queue import QueueItemCreate, QueueItemRead, QueueItemUpdate, QueueStatusUpdate
+from app.tenancy import get_owned
 
 router = APIRouter()
 
@@ -23,19 +25,24 @@ def _scheduled_date_from_data(workout_data: dict | None) -> datetime | None:
 
 
 @router.get("/pending", response_model=list[QueueItemRead])
-def get_pending(db: DbSession):
-    q = select(WorkoutQueue).where(WorkoutQueue.status == "pending").order_by(WorkoutQueue.created_at)
+def get_pending(db: DbSession, user: CurrentUser):
+    q = (
+        select(WorkoutQueue)
+        .where(WorkoutQueue.user_id == user.id, WorkoutQueue.status == "pending")
+        .order_by(WorkoutQueue.created_at)
+    )
     return db.scalars(q).all()
 
 
 @router.get("", response_model=list[QueueItemRead])
 def list_queue(
     db: DbSession,
+    user: CurrentUser,
     queue_status: str | None = Query(default=None, alias="status"),
     limit: int = Query(default=50, le=200),
     offset: int = 0,
 ):
-    q = select(WorkoutQueue).order_by(WorkoutQueue.created_at.desc())
+    q = select(WorkoutQueue).where(WorkoutQueue.user_id == user.id).order_by(WorkoutQueue.created_at.desc())
 
     if queue_status:
         q = q.where(WorkoutQueue.status == queue_status)
@@ -45,8 +52,9 @@ def list_queue(
 
 
 @router.post("", response_model=QueueItemRead, status_code=status.HTTP_201_CREATED)
-def create_queue_item(payload: QueueItemCreate, db: DbSession):
+def create_queue_item(payload: QueueItemCreate, db: DbSession, user: CurrentUser):
     item = WorkoutQueue(
+        user_id=user.id,
         activity_type=payload.activity_type,
         title=payload.title,
         description=payload.description,
@@ -61,10 +69,11 @@ def create_queue_item(payload: QueueItemCreate, db: DbSession):
 
 
 @router.post("/batch", response_model=list[QueueItemRead], status_code=status.HTTP_201_CREATED)
-def create_queue_items_batch(payload: list[QueueItemCreate], db: DbSession):
+def create_queue_items_batch(payload: list[QueueItemCreate], db: DbSession, user: CurrentUser):
     items = []
     for p in payload:
         item = WorkoutQueue(
+            user_id=user.id,
             activity_type=p.activity_type,
             title=p.title,
             description=p.description,
@@ -81,10 +90,8 @@ def create_queue_items_batch(payload: list[QueueItemCreate], db: DbSession):
 
 
 @router.patch("/{item_id}", response_model=QueueItemRead)
-def update_queue_item(item_id: uuid.UUID, payload: QueueItemUpdate, db: DbSession):
-    item = db.get(WorkoutQueue, item_id)
-    if not item:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Queue item not found")
+def update_queue_item(item_id: uuid.UUID, payload: QueueItemUpdate, db: DbSession, user: CurrentUser):
+    item = get_owned(db, WorkoutQueue, item_id, user)
 
     if payload.activity_type is not None:
         item.activity_type = payload.activity_type
@@ -106,10 +113,8 @@ def update_queue_item(item_id: uuid.UUID, payload: QueueItemUpdate, db: DbSessio
 
 
 @router.patch("/{item_id}/status", response_model=QueueItemRead)
-def update_queue_status(item_id: uuid.UUID, payload: QueueStatusUpdate, db: DbSession):
-    item = db.get(WorkoutQueue, item_id)
-    if not item:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Queue item not found")
+def update_queue_status(item_id: uuid.UUID, payload: QueueStatusUpdate, db: DbSession, user: CurrentUser):
+    item = get_owned(db, WorkoutQueue, item_id, user)
 
     now = datetime.now(timezone.utc)
     item.status = payload.status
@@ -125,10 +130,8 @@ def update_queue_status(item_id: uuid.UUID, payload: QueueStatusUpdate, db: DbSe
 
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_queue_item(item_id: uuid.UUID, db: DbSession):
-    item = db.get(WorkoutQueue, item_id)
-    if not item:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Queue item not found")
+def delete_queue_item(item_id: uuid.UUID, db: DbSession, user: CurrentUser):
+    item = get_owned(db, WorkoutQueue, item_id, user)
     db.delete(item)
     db.commit()
 
@@ -139,13 +142,17 @@ workout_queue_router = APIRouter()
 
 
 @workout_queue_router.get("")
-def app_get_pending(db: DbSession):
+def app_get_pending(db: DbSession, user: CurrentUser):
     """Return pending queue items as workout compositions for the iOS app.
 
     Each item's workout_data is returned directly with the queue item's
     id injected, so the app can decode QueuedWorkoutComposition objects.
     """
-    q = select(WorkoutQueue).where(WorkoutQueue.status == "pending").order_by(WorkoutQueue.created_at)
+    q = (
+        select(WorkoutQueue)
+        .where(WorkoutQueue.user_id == user.id, WorkoutQueue.status == "pending")
+        .order_by(WorkoutQueue.created_at)
+    )
     items = db.scalars(q).all()
     results = []
     for item in items:
@@ -157,11 +164,9 @@ def app_get_pending(db: DbSession):
 
 
 @workout_queue_router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-def app_mark_queue_item_synced(item_id: uuid.UUID, db: DbSession):
+def app_mark_queue_item_synced(item_id: uuid.UUID, db: DbSession, user: CurrentUser):
     """Mark a queue item as synced to Apple Watch (previously deleted it)."""
-    item = db.get(WorkoutQueue, item_id)
-    if not item:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Queue item not found")
+    item = get_owned(db, WorkoutQueue, item_id, user)
     item.status = "synced"
     item.fetched_at = item.fetched_at or datetime.now(timezone.utc)
     db.commit()

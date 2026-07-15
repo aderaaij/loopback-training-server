@@ -4,16 +4,23 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import or_, select
 
+from app.auth import CurrentUser
 from app.database import DbSession
 from app.models.plan import Plan
 from app.models.plan_note import PlanNote
+from app.models.user import User
 from app.schemas.plan_note import PlanContext, PlanNoteCreate, PlanNoteRead, PlanNoteUpdate
+from app.tenancy import get_owned
 
 router = APIRouter()
 
 
-def _resolve_active_plan(db: DbSession) -> Plan | None:
-    q = select(Plan).where(Plan.status == "active").order_by(Plan.created_at.desc())
+def _resolve_active_plan(db: DbSession, user: User) -> Plan | None:
+    q = (
+        select(Plan)
+        .where(Plan.user_id == user.id, Plan.status == "active")
+        .order_by(Plan.created_at.desc())
+    )
     return db.scalars(q).first()
 
 
@@ -22,8 +29,11 @@ def _not_expired_filter(now: datetime):
 
 
 @router.post("", response_model=PlanNoteRead, status_code=status.HTTP_201_CREATED)
-def create_note(payload: PlanNoteCreate, db: DbSession):
+def create_note(payload: PlanNoteCreate, db: DbSession, user: CurrentUser):
+    if payload.plan_id is not None:
+        get_owned(db, Plan, payload.plan_id, user)  # 404s if the plan isn't the caller's
     note = PlanNote(
+        user_id=user.id,
         plan_id=payload.plan_id,
         kind=payload.kind,
         summary=payload.summary,
@@ -41,6 +51,7 @@ def create_note(payload: PlanNoteCreate, db: DbSession):
 @router.get("", response_model=list[PlanNoteRead])
 def list_notes(
     db: DbSession,
+    user: CurrentUser,
     plan_id: uuid.UUID | None = None,
     kind: str | None = None,
     conversation_id: str | None = None,
@@ -48,7 +59,7 @@ def list_notes(
     include_expired: bool = False,
     limit: int = Query(default=50, le=200),
 ):
-    q = select(PlanNote)
+    q = select(PlanNote).where(PlanNote.user_id == user.id)
 
     if plan_id is not None:
         q = q.where(PlanNote.plan_id == plan_id)
@@ -69,6 +80,7 @@ def list_notes(
 @router.get("/context", response_model=PlanContext)
 def get_context(
     db: DbSession,
+    user: CurrentUser,
     plan_id: uuid.UUID | None = None,
     since_days: int = Query(default=60, ge=1, le=365),
     limit: int = Query(default=40, ge=1, le=200),
@@ -80,17 +92,16 @@ def get_context(
     """
     plan: Plan | None
     if plan_id is None:
-        plan = _resolve_active_plan(db)
+        plan = _resolve_active_plan(db, user)
     else:
-        plan = db.get(Plan, plan_id)
-        if plan is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
+        plan = get_owned(db, Plan, plan_id, user)
 
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(days=since_days)
 
     note_q = (
         select(PlanNote)
+        .where(PlanNote.user_id == user.id)
         .where(PlanNote.created_at >= cutoff)
         .where(_not_expired_filter(now))
     )
@@ -134,18 +145,13 @@ def get_context(
 
 
 @router.get("/{note_id}", response_model=PlanNoteRead)
-def get_note(note_id: uuid.UUID, db: DbSession):
-    note = db.get(PlanNote, note_id)
-    if not note:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
-    return note
+def get_note(note_id: uuid.UUID, db: DbSession, user: CurrentUser):
+    return get_owned(db, PlanNote, note_id, user)
 
 
 @router.patch("/{note_id}", response_model=PlanNoteRead)
-def update_note(note_id: uuid.UUID, payload: PlanNoteUpdate, db: DbSession):
-    note = db.get(PlanNote, note_id)
-    if not note:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
+def update_note(note_id: uuid.UUID, payload: PlanNoteUpdate, db: DbSession, user: CurrentUser):
+    note = get_owned(db, PlanNote, note_id, user)
 
     if payload.kind is not None:
         note.kind = payload.kind
@@ -164,9 +170,7 @@ def update_note(note_id: uuid.UUID, payload: PlanNoteUpdate, db: DbSession):
 
 
 @router.delete("/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_note(note_id: uuid.UUID, db: DbSession):
-    note = db.get(PlanNote, note_id)
-    if not note:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
+def delete_note(note_id: uuid.UUID, db: DbSession, user: CurrentUser):
+    note = get_owned(db, PlanNote, note_id, user)
     db.delete(note)
     db.commit()

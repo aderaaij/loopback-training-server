@@ -4,16 +4,20 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 
+from app.auth import CurrentUser
 from app.database import DbSession
 from app.models.workout import Workout
 from app.schemas.workout import WorkoutCreate, WorkoutList, WorkoutRead, WorkoutSummary
+from app.tenancy import get_owned
 
 router = APIRouter()
 
 
 @router.post("", response_model=WorkoutRead, status_code=status.HTTP_201_CREATED)
-def create_workout(payload: WorkoutCreate, db: DbSession):
+def create_workout(payload: WorkoutCreate, db: DbSession, user: CurrentUser):
     existing = db.get(Workout, payload.id)
+    if existing and existing.user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Workout id belongs to another user")
     if existing:
         existing.activity_type = payload.activity_type
         existing.start_date = payload.start_date
@@ -32,6 +36,7 @@ def create_workout(payload: WorkoutCreate, db: DbSession):
 
     workout = Workout(
         id=payload.id,
+        user_id=user.id,
         activity_type=payload.activity_type,
         start_date=payload.start_date,
         end_date=payload.end_date,
@@ -53,6 +58,7 @@ def create_workout(payload: WorkoutCreate, db: DbSession):
 @router.get("", response_model=list[WorkoutList])
 def list_workouts(
     db: DbSession,
+    user: CurrentUser,
     activity_type: str | None = None,
     start_after: datetime | None = None,
     start_before: datetime | None = None,
@@ -60,7 +66,7 @@ def list_workouts(
     limit: int = Query(default=50, le=200),
     offset: int = 0,
 ):
-    q = select(Workout).order_by(Workout.start_date.desc())
+    q = select(Workout).where(Workout.user_id == user.id).order_by(Workout.start_date.desc())
 
     if activity_type:
         q = q.where(Workout.activity_type == activity_type)
@@ -78,6 +84,7 @@ def list_workouts(
 @router.get("/summary", response_model=list[WorkoutSummary])
 def workout_summary(
     db: DbSession,
+    user: CurrentUser,
     activity_type: str | None = None,
     period: str = Query(default="month", pattern="^(week|month|year)$"),
 ):
@@ -94,6 +101,7 @@ def workout_summary(
             func.avg(Workout.duration).label("avg_duration"),
             func.sum(Workout.total_energy_burned).label("total_energy_burned"),
         )
+        .where(Workout.user_id == user.id)
         .group_by(trunc, Workout.activity_type)
         .order_by(trunc.desc())
     )
@@ -118,33 +126,24 @@ def workout_summary(
 
 
 @router.get("/{workout_id}", response_model=WorkoutRead)
-def get_workout(workout_id: uuid.UUID, db: DbSession):
-    workout = db.get(Workout, workout_id)
-    if not workout:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workout not found")
-    return workout
+def get_workout(workout_id: uuid.UUID, db: DbSession, user: CurrentUser):
+    return get_owned(db, Workout, workout_id, user)
 
 
 @router.get("/{workout_id}/splits")
-def get_workout_splits(workout_id: uuid.UUID, db: DbSession):
-    workout = db.get(Workout, workout_id)
-    if not workout:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workout not found")
+def get_workout_splits(workout_id: uuid.UUID, db: DbSession, user: CurrentUser):
+    workout = get_owned(db, Workout, workout_id, user)
     return workout.data.get("splits", workout.data.get("events", []))
 
 
 @router.get("/{workout_id}/heartrate")
-def get_workout_heartrate(workout_id: uuid.UUID, db: DbSession):
-    workout = db.get(Workout, workout_id)
-    if not workout:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workout not found")
+def get_workout_heartrate(workout_id: uuid.UUID, db: DbSession, user: CurrentUser):
+    workout = get_owned(db, Workout, workout_id, user)
     return workout.data.get("heartRate", workout.data.get("heartRateSamples", []))
 
 
 @router.delete("/{workout_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_workout(workout_id: uuid.UUID, db: DbSession):
-    workout = db.get(Workout, workout_id)
-    if not workout:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workout not found")
+def delete_workout(workout_id: uuid.UUID, db: DbSession, user: CurrentUser):
+    workout = get_owned(db, Workout, workout_id, user)
     db.delete(workout)
     db.commit()

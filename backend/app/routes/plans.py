@@ -4,9 +4,11 @@ from datetime import datetime, time, timezone
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
+from app.auth import CurrentUser
 from app.database import DbSession
 from app.models.plan import Plan
 from app.models.queue import WorkoutQueue
+from app.models.user import User
 from app.schedule_utils import resolve_sessions
 from app.schemas.plan import (
     PlanCreate,
@@ -17,20 +19,22 @@ from app.schemas.plan import (
     ScheduledSession,
 )
 from app.schemas.queue import QueueItemRead
+from app.tenancy import get_owned
 
 router = APIRouter()
 
 
-def _runs_by_date(db: DbSession, dates: list) -> dict:
-    """Map each calendar date in the range to the titles of queued workouts
-    (Apple Watch compositions) scheduled that day — the things a strength
-    session could collide with."""
+def _runs_by_date(db: DbSession, user: User, dates: list) -> dict:
+    """Map each calendar date in the range to the titles of this user's queued
+    workouts (Apple Watch compositions) scheduled that day — the things a
+    strength session could collide with."""
     if not dates:
         return {}
     lo = datetime.combine(min(dates), time.min, tzinfo=timezone.utc)
     hi = datetime.combine(max(dates), time.max, tzinfo=timezone.utc)
     rows = db.scalars(
         select(WorkoutQueue).where(
+            WorkoutQueue.user_id == user.id,
             WorkoutQueue.scheduled_date.is_not(None),
             WorkoutQueue.scheduled_date >= lo,
             WorkoutQueue.scheduled_date <= hi,
@@ -42,10 +46,10 @@ def _runs_by_date(db: DbSession, dates: list) -> dict:
     return out
 
 
-def _build_schedule_response(db: DbSession, plan: Plan) -> PlanScheduleResponse:
+def _build_schedule_response(db: DbSession, user: User, plan: Plan) -> PlanScheduleResponse:
     schedule = (plan.metadata_ or {}).get("schedule")
     raw_sessions = resolve_sessions(schedule)
-    runs = _runs_by_date(db, [s["date"] for s in raw_sessions])
+    runs = _runs_by_date(db, user, [s["date"] for s in raw_sessions])
 
     sessions: list[ScheduledSession] = []
     warnings: list[str] = []
@@ -74,8 +78,9 @@ def _build_schedule_response(db: DbSession, plan: Plan) -> PlanScheduleResponse:
 
 
 @router.post("", response_model=PlanRead, status_code=status.HTTP_201_CREATED)
-def create_plan(payload: PlanCreate, db: DbSession):
+def create_plan(payload: PlanCreate, db: DbSession, user: CurrentUser):
     plan = Plan(
+        user_id=user.id,
         name=payload.name,
         activity_type=payload.activity_type,
         status=payload.status,
@@ -93,10 +98,11 @@ def create_plan(payload: PlanCreate, db: DbSession):
 @router.get("", response_model=list[PlanRead])
 def list_plans(
     db: DbSession,
+    user: CurrentUser,
     plan_status: str | None = Query(default=None, alias="status"),
     activity_type: str | None = None,
 ):
-    q = select(Plan).order_by(Plan.created_at.desc())
+    q = select(Plan).where(Plan.user_id == user.id).order_by(Plan.created_at.desc())
 
     if plan_status:
         q = q.where(Plan.status == plan_status)
@@ -107,18 +113,13 @@ def list_plans(
 
 
 @router.get("/{plan_id}", response_model=PlanRead)
-def get_plan(plan_id: uuid.UUID, db: DbSession):
-    plan = db.get(Plan, plan_id)
-    if not plan:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
-    return plan
+def get_plan(plan_id: uuid.UUID, db: DbSession, user: CurrentUser):
+    return get_owned(db, Plan, plan_id, user)
 
 
 @router.patch("/{plan_id}", response_model=PlanRead)
-def update_plan(plan_id: uuid.UUID, payload: PlanUpdate, db: DbSession):
-    plan = db.get(Plan, plan_id)
-    if not plan:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
+def update_plan(plan_id: uuid.UUID, payload: PlanUpdate, db: DbSession, user: CurrentUser):
+    plan = get_owned(db, Plan, plan_id, user)
 
     if payload.name is not None:
         plan.name = payload.name
@@ -141,60 +142,53 @@ def update_plan(plan_id: uuid.UUID, payload: PlanUpdate, db: DbSession):
 
 
 @router.delete("/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_plan(plan_id: uuid.UUID, db: DbSession):
-    plan = db.get(Plan, plan_id)
-    if not plan:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
+def delete_plan(plan_id: uuid.UUID, db: DbSession, user: CurrentUser):
+    plan = get_owned(db, Plan, plan_id, user)
     db.delete(plan)
     db.commit()
 
 
 @router.get("/{plan_id}/workouts", response_model=list[QueueItemRead])
-def get_plan_workouts(plan_id: uuid.UUID, db: DbSession):
-    plan = db.get(Plan, plan_id)
-    if not plan:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
+def get_plan_workouts(plan_id: uuid.UUID, db: DbSession, user: CurrentUser):
+    get_owned(db, Plan, plan_id, user)  # 404s if the plan isn't the caller's
 
-    q = select(WorkoutQueue).where(WorkoutQueue.plan_id == plan_id).order_by(WorkoutQueue.created_at)
+    q = (
+        select(WorkoutQueue)
+        .where(WorkoutQueue.user_id == user.id, WorkoutQueue.plan_id == plan_id)
+        .order_by(WorkoutQueue.created_at)
+    )
     return db.scalars(q).all()
 
 
-def _get_plan_or_404(plan_id: uuid.UUID, db: DbSession) -> Plan:
-    plan = db.get(Plan, plan_id)
-    if not plan:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
-    return plan
-
-
 @router.get("/{plan_id}/schedule", response_model=PlanScheduleResponse)
-def get_plan_schedule(plan_id: uuid.UUID, db: DbSession):
+def get_plan_schedule(plan_id: uuid.UUID, db: DbSession, user: CurrentUser):
     """Return the plan's recurring schedule expanded into concrete dated
     sessions, each flagged where it collides with a queued run."""
-    plan = _get_plan_or_404(plan_id, db)
-    return _build_schedule_response(db, plan)
+    plan = get_owned(db, Plan, plan_id, user)
+    return _build_schedule_response(db, user, plan)
 
 
 @router.put("/{plan_id}/schedule", response_model=PlanScheduleResponse)
-def set_plan_schedule(plan_id: uuid.UUID, payload: PlanSchedule, db: DbSession):
+def set_plan_schedule(plan_id: uuid.UUID, payload: PlanSchedule, db: DbSession, user: CurrentUser):
     """Set (replace) the plan's recurring weekly schedule. Stored on
     plan.metadata.schedule; the response includes the resolved dates and any
     run conflicts as warnings (conflicts are surfaced, not blocked)."""
-    plan = _get_plan_or_404(plan_id, db)
+    plan = get_owned(db, Plan, plan_id, user)
     metadata = dict(plan.metadata_ or {})
     metadata["schedule"] = payload.model_dump(by_alias=True, mode="json", exclude_none=True)
     plan.metadata_ = metadata
     db.commit()
     db.refresh(plan)
-    return _build_schedule_response(db, plan)
+    return _build_schedule_response(db, user, plan)
 
 
 @router.delete("/{plan_id}/schedule", response_model=PlanScheduleResponse)
-def clear_plan_schedule(plan_id: uuid.UUID, db: DbSession):
+def clear_plan_schedule(plan_id: uuid.UUID, db: DbSession, user: CurrentUser):
     """Remove the plan's recurring schedule."""
-    plan = _get_plan_or_404(plan_id, db)
+    plan = get_owned(db, Plan, plan_id, user)
     metadata = dict(plan.metadata_ or {})
     metadata.pop("schedule", None)
     plan.metadata_ = metadata
     db.commit()
     db.refresh(plan)
-    return _build_schedule_response(db, plan)
+    return _build_schedule_response(db, user, plan)

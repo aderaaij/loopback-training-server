@@ -98,7 +98,13 @@ New files: `app/models/user.py`, `app/models/api_token.py`, `app/routes/auth.py`
 
 **Verify:** existing iOS app + MCP still work unchanged (legacy key token); login returns a token that works on `/api/workouts`.
 
-## Phase 2 — Tenancy: `user_id` everywhere
+## Phase 2 — ✅ DONE 2026-07-15: Tenancy: `user_id` everywhere
+
+**Shipped:** `user_id` FK (NOT NULL, ON DELETE CASCADE, indexed) on all 8 data tables via Migration C `c1d2e3f4a5b6` (add nullable → backfill to admin → NOT NULL); the two global unique constraints became per-user composites (`uq_daily_health_metrics_user_date`, `uq_workout_feedback_user_workout`). `app/tenancy.py:get_owned` replaced ~20 bare PK lookups; every list/summary/upsert query is scoped by `user.id`; the inventory snapshot delete is now scoped so it can't wipe other users. `build_calendar` takes a `user_id` (None = dashboard's unscoped all-users view until Phase 3). Added the first test suite (`backend/tests/`, pytest as a `test` extra installed in the image): 9 two-user isolation tests — all pass, including the inventory-wipe hazard. Live-verified on the real DB: a throwaway second user saw 0 of admin's 200 workouts, 404'd on admin's ids; legacy admin token, dashboard, and MCP all still work. Family accounts are now safe to create.
+
+Original plan below.
+
+
 
 **Migration C** (one revision, per table): add `user_id UUID NULL` → `UPDATE ... SET user_id = <admin id>` → `ALTER ... SET NOT NULL` + `FK users(id) ON DELETE CASCADE` + index. Tables: `workout`, `workout_queue`, `workout_action`, `workout_feedback`, `workout_inventory`, `daily_health_metrics`, `plans`, `plan_note`.
 

@@ -14,7 +14,7 @@ RUN uv venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 COPY pyproject.toml uv.lock ./
-RUN uv pip install -r pyproject.toml
+RUN uv pip install -r pyproject.toml --extra test
 
 COPY . .
 

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, DateTime, Float, Index, Integer, Numeric, String, Text, func
+from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -13,6 +13,9 @@ class Workout(Base):
     __tablename__ = "workout"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     activity_type: Mapped[str] = mapped_column(String(100), index=True)
     start_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     end_date: Mapped[datetime] = mapped_column(DateTime(timezone=True))

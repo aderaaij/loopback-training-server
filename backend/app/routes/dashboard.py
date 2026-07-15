@@ -195,7 +195,8 @@ def schedule_view(request: Request, db: DbSession):
     num_weeks = 5
     end = start_monday + timedelta(days=num_weeks * 7 - 1)
 
-    calendar = build_calendar(db, start_monday, end)
+    # Unscoped (all users) until the dashboard gets per-user auth in Phase 3.
+    calendar = build_calendar(db, None, start_monday, end)
     by_date: dict[str, list] = {}
     for e in calendar["entries"]:
         by_date.setdefault(e["date"], []).append(e)

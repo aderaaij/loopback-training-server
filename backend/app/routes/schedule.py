@@ -5,11 +5,13 @@ This is the shared timeline the LLM reads to place strength sessions around
 existing runs, and that the dashboard renders as a weekly grid.
 """
 
+import uuid
 from datetime import date, datetime, time, timedelta, timezone
 
 from fastapi import APIRouter, Query
 from sqlalchemy import select
 
+from app.auth import CurrentUser
 from app.database import DbSession
 from app.models.plan import Plan
 from app.models.queue import WorkoutQueue
@@ -22,31 +24,41 @@ router = APIRouter()
 STRENGTH_ACTIVITY = "traditionalStrength"
 
 
-def build_calendar(db: DbSession, date_from: date, date_to: date) -> dict:
+def build_calendar(db: DbSession, user_id: uuid.UUID | None, date_from: date, date_to: date) -> dict:
+    """Merge scheduled runs + strength sessions in a window.
+
+    ``user_id`` scopes every sub-query to one user; pass ``None`` for an
+    unscoped, all-users view (the dashboard's temporary Phase-2 behaviour until
+    it gets per-user auth in Phase 3).
+    """
     lo = datetime.combine(date_from, time.min, tzinfo=timezone.utc)
     hi = datetime.combine(date_to, time.max, tzinfo=timezone.utc)
 
     # --- Scheduled runs (queued Apple Watch compositions) ---
-    run_rows = db.scalars(
-        select(WorkoutQueue).where(
-            WorkoutQueue.scheduled_date.is_not(None),
-            WorkoutQueue.scheduled_date >= lo,
-            WorkoutQueue.scheduled_date <= hi,
-        )
-    ).all()
+    run_q = select(WorkoutQueue).where(
+        WorkoutQueue.scheduled_date.is_not(None),
+        WorkoutQueue.scheduled_date >= lo,
+        WorkoutQueue.scheduled_date <= hi,
+    )
+    done_q = select(Workout).where(
+        Workout.activity_type == STRENGTH_ACTIVITY,
+        Workout.start_date >= lo,
+        Workout.start_date <= hi,
+    )
+    active_plans_q = select(Plan).where(Plan.status == "active")
+    if user_id is not None:
+        run_q = run_q.where(WorkoutQueue.user_id == user_id)
+        done_q = done_q.where(Workout.user_id == user_id)
+        active_plans_q = active_plans_q.where(Plan.user_id == user_id)
+
+    run_rows = db.scalars(run_q).all()
 
     # --- Completed strength sessions in the window (for done-matching) ---
-    done_rows = db.scalars(
-        select(Workout).where(
-            Workout.activity_type == STRENGTH_ACTIVITY,
-            Workout.start_date >= lo,
-            Workout.start_date <= hi,
-        )
-    ).all()
+    done_rows = db.scalars(done_q).all()
     done_dates = {w.start_date.date() for w in done_rows}
 
     # --- Recurring strength sessions from active plan schedules ---
-    active_plans = db.scalars(select(Plan).where(Plan.status == "active")).all()
+    active_plans = db.scalars(active_plans_q).all()
 
     entries: list[dict] = []
 
@@ -99,6 +111,7 @@ def build_calendar(db: DbSession, date_from: date, date_to: date) -> dict:
 @router.get("/calendar")
 def get_calendar(
     db: DbSession,
+    user: CurrentUser,
     date_from: date | None = Query(default=None, alias="from"),
     date_to: date | None = Query(default=None, alias="to"),
 ):
@@ -108,4 +121,4 @@ def get_calendar(
     today = datetime.now(timezone.utc).date()
     date_from = date_from or today
     date_to = date_to or (today + timedelta(days=28))
-    return build_calendar(db, date_from, date_to)
+    return build_calendar(db, user.id, date_from, date_to)
