@@ -4,6 +4,7 @@ import logging
 
 from fastmcp import FastMCP
 
+from app.schemas import FeedbackAction
 from app.services.api_client import client
 
 logger = logging.getLogger(__name__)
@@ -15,7 +16,7 @@ feedback_router = FastMCP(name="Feedback Tools")
 async def get_workout_feedback(
     since: str | None = None,
     limit: int = 20,
-    action: str | None = None,
+    action: FeedbackAction | None = None,
 ) -> dict | list:
     """
     Retrieve feedback entries for missed workouts.

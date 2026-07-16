@@ -5,6 +5,16 @@ import uuid
 
 from fastmcp import FastMCP
 
+from app.schemas import (
+    ActivityType,
+    BatchWorkoutItem,
+    IntervalBlock,
+    IsoDateTime,
+    Location,
+    QueueStatus,
+    WorkoutStep,
+    dump_step,
+)
 from app.services.api_client import client
 
 logger = logging.getLogger(__name__)
@@ -30,7 +40,7 @@ async def get_pending_workouts() -> dict | list:
 
 @queue_router.tool
 async def list_queued_workouts(
-    status: str | None = None,
+    status: QueueStatus | None = None,
     limit: int = 50,
 ) -> dict | list:
     """
@@ -40,8 +50,8 @@ async def list_queued_workouts(
     issue edit or delete actions against it.
 
     Args:
-        status: Optional filter — "pending", "fetched", or "completed".
-            Omit to return all items regardless of status.
+        status: Optional filter — "pending", "fetched", "synced",
+            "completed", or "skipped". Omit to return all items.
         limit: Max number of items to return (default 50, max 200).
 
     Returns:
@@ -58,48 +68,37 @@ async def list_queued_workouts(
 
 @queue_router.tool
 async def create_workout(
-    activity_type: str,
+    activity_type: ActivityType,
     display_name: str,
-    location: str,
-    scheduled_date: str,
-    blocks: list[dict],
-    warmup: dict | None = None,
-    cooldown: dict | None = None,
+    location: Location,
+    scheduled_date: IsoDateTime,
+    blocks: list[IntervalBlock],
+    warmup: WorkoutStep | None = None,
+    cooldown: WorkoutStep | None = None,
     description: str | None = None,
     plan_id: str | None = None,
 ) -> dict | list:
     """
-    Create a structured workout composition and queue it for the Apple Watch.
+    Create a structured workout and queue it for the user's Apple Watch.
 
-    The workout will appear on the user's Apple Watch via WorkoutKit after
-    the iPhone app syncs with the queue.
+    Full WorkoutKit support: repeatable interval blocks, warmup/cooldown steps,
+    goals (distance / time / energy / open), and an optional per-step ALERT that
+    coaches effort on the watch — pace/speed range, heart-rate range (BPM),
+    heart-rate ZONE (1-5), cadence, or running power. E.g. a Zone 2 base run is
+    a single time- or distance-goal step with alert
+    {"type": "heartRateZone", "zone": 2}. WorkoutKit allows one alert per step.
+
+    The exact structure of blocks/steps/goals/alerts is defined in this tool's
+    input schema. The workout appears on the watch after the iPhone app syncs.
 
     Args:
-        activity_type: One of "running", "cycling", "walking", "hiking", "swimming".
+        activity_type: Sport for the WorkoutKit session.
         display_name: Name shown on Apple Watch (e.g. "6x400m Intervals", "Tempo Run").
-        location: Either "outdoor" or "indoor".
+        location: Where the workout happens (affects GPS).
         scheduled_date: When the workout should appear, ISO 8601 (e.g. "2026-03-18T07:00:00Z").
-        blocks: List of interval blocks. Each block has:
-            - iterations (int): Number of times to repeat this block.
-            - steps (list): List of interval steps, each with:
-                - purpose (str): "work" or "recovery"
-                - goal (dict): What defines completion of this step.
-                    - type: "distance", "time", "energy", or "open"
-                    - value (number): Required for distance/time/energy, omit for open.
-                    - unit (str): Required for distance/time.
-                      Distance units: "meters", "kilometers", "miles"
-                      Time units: "seconds", "minutes"
-                      Energy: "kilocalories"
-                - alert (dict|null): Optional pacing/effort alert.
-                    - type: "speed", "heartRate", "heartRateZone", "cadence", "power", "powerZone"
-                    - For speed: min, max, unit ("metersPerSecond" or "kilometersPerHour")
-                    - For heartRate: min, max (BPM)
-                    - For heartRateZone: zone (1-5)
-                    - For cadence: min, max (steps/min)
-                    - For power: min, max (watts)
-                    - For powerZone: zone (integer)
-        warmup: Optional warmup step with same goal/alert structure as an interval step.
-        cooldown: Optional cooldown step with same goal/alert structure as an interval step.
+        blocks: Interval blocks, each repeated `iterations` times.
+        warmup: Optional warmup step (goal + optional alert).
+        cooldown: Optional cooldown step (goal + optional alert).
         description: Optional text description of the workout.
         plan_id: Optional UUID of the training plan this workout belongs to.
 
@@ -157,9 +156,9 @@ async def create_workout(
             "activityType": activity_type,
             "location": location,
             "scheduledDate": scheduled_date,
-            "blocks": blocks,
-            "warmup": warmup,
-            "cooldown": cooldown,
+            "blocks": [b.model_dump(exclude_none=True) for b in blocks],
+            "warmup": dump_step(warmup),
+            "cooldown": dump_step(cooldown),
         }
         return await client.create_queue_item(
             activity_type=activity_type,
@@ -177,12 +176,14 @@ async def create_workout(
 async def update_queued_workout(
     item_id: str,
     display_name: str | None = None,
-    activity_type: str | None = None,
-    location: str | None = None,
-    scheduled_date: str | None = None,
-    blocks: list[dict] | None = None,
-    warmup: dict | None = None,
-    cooldown: dict | None = None,
+    activity_type: ActivityType | None = None,
+    location: Location | None = None,
+    scheduled_date: IsoDateTime | None = None,
+    blocks: list[IntervalBlock] | None = None,
+    warmup: WorkoutStep | None = None,
+    cooldown: WorkoutStep | None = None,
+    clear_warmup: bool = False,
+    clear_cooldown: bool = False,
     description: str | None = None,
     plan_id: str | None = None,
 ) -> dict | list:
@@ -191,7 +192,8 @@ async def update_queued_workout(
 
     Use this to reschedule a workout, change the interval structure,
     rename it, or modify any part of the composition before it syncs
-    to Apple Watch.
+    to Apple Watch. Steps support the same goals and alerts (incl.
+    heart-rate zones) as create_workout — see that tool's input schema.
 
     Args:
         item_id: UUID of the queue item (from get_pending_workouts).
@@ -200,8 +202,10 @@ async def update_queued_workout(
         location: New location ("outdoor" or "indoor").
         scheduled_date: New scheduled date (ISO 8601).
         blocks: New interval blocks (replaces all existing blocks).
-        warmup: New warmup step (use {} to clear, null to leave unchanged).
-        cooldown: New cooldown step (use {} to clear, null to leave unchanged).
+        warmup: New warmup step (omit to leave unchanged).
+        cooldown: New cooldown step (omit to leave unchanged).
+        clear_warmup: Set true to remove the existing warmup.
+        clear_cooldown: Set true to remove the existing cooldown.
         description: New text description.
         plan_id: UUID of the training plan to assign this workout to.
 
@@ -232,13 +236,13 @@ async def update_queued_workout(
             existing_data["scheduledDate"] = scheduled_date
             updated = True
         if blocks is not None:
-            existing_data["blocks"] = blocks
+            existing_data["blocks"] = [b.model_dump(exclude_none=True) for b in blocks]
             updated = True
-        if warmup is not None:
-            existing_data["warmup"] = warmup if warmup != {} else None
+        if warmup is not None or clear_warmup:
+            existing_data["warmup"] = dump_step(warmup)
             updated = True
-        if cooldown is not None:
-            existing_data["cooldown"] = cooldown if cooldown != {} else None
+        if cooldown is not None or clear_cooldown:
+            existing_data["cooldown"] = dump_step(cooldown)
             updated = True
 
         return await client.update_queue_item(
@@ -255,15 +259,19 @@ async def update_queued_workout(
 
 
 @queue_router.tool
-async def update_workout_status(item_id: str, status: str) -> dict | list:
+async def update_workout_status(item_id: str, status: QueueStatus) -> dict | list:
     """
     Update the status of a queue item.
 
+    Lifecycle: pending -> fetched -> synced -> completed. "skipped" retires
+    the item (the watch endpoints stop serving it and it no longer counts as
+    a schedule collision) — normally set via missed-workout feedback with
+    action "skip", but it can be set directly here too.
+
     Args:
         item_id: UUID of the queue item.
-        status: New status value (e.g. "pending", "fetched", "completed").
-                Setting to "fetched" records the fetch timestamp.
-                Setting to "completed" records the completion timestamp.
+        status: New status. Setting "fetched" records the fetch timestamp;
+                "completed" records the completion timestamp.
 
     Returns:
         The updated queue item object.
@@ -276,41 +284,34 @@ async def update_workout_status(item_id: str, status: str) -> dict | list:
 
 
 @queue_router.tool
-async def batch_create_workouts(workouts: list[dict]) -> dict | list:
+async def batch_create_workouts(workouts: list[BatchWorkoutItem]) -> dict | list:
     """
     Queue multiple workouts for Apple Watch in a single call.
 
     Use this instead of calling create_workout repeatedly when you need to
-    schedule an entire training plan (e.g. 4 weeks of workouts).
+    schedule an entire training plan (e.g. 4 weeks of workouts). Each workout
+    supports the same full composition as create_workout: interval blocks,
+    warmup/cooldown, goals (distance/time/energy/open), and per-step alerts —
+    pace/speed range, heart-rate range, heart-rate zone (1-5), cadence, power.
 
     Args:
-        workouts: List of workout objects. Each must have:
-            - activityType (str): "running", "cycling", "walking", "hiking", or "swimming".
-            - title (str): Display name (e.g. "Tempo Run").
-            - description (str|null): Optional text description.
-            - workoutData (dict): Full workout composition with:
-                - id (str): A unique UUID (generate one per workout).
-                - displayName (str): Name shown on Apple Watch.
-                - activityType (str): Same as above.
-                - location (str): "outdoor" or "indoor".
-                - scheduledDate (str): ISO 8601 date.
-                - blocks (list): Interval blocks.
-                - warmup (dict|null): Optional warmup step.
-                - cooldown (dict|null): Optional cooldown step.
+        workouts: Workouts to queue — see the input schema for the full
+            structure. Omit workoutData.id to have a UUID generated per
+            workout. Set planId to link a workout to a training plan.
 
     Example:
         workouts: [
             {
                 "activityType": "running",
-                "title": "Easy 5K",
+                "title": "Easy Z2 5K",
                 "workoutData": {
-                    "id": "unique-uuid-1",
-                    "displayName": "Easy 5K",
+                    "displayName": "Easy Z2 5K",
                     "activityType": "running",
                     "location": "outdoor",
                     "scheduledDate": "2026-03-20T07:00:00Z",
                     "blocks": [{"iterations": 1, "steps": [{"purpose": "work",
-                        "goal": {"type": "distance", "value": 5000, "unit": "meters"}}]}]
+                        "goal": {"type": "distance", "value": 5000, "unit": "meters"},
+                        "alert": {"type": "heartRateZone", "zone": 2}}]}]
                 }
             }
         ]
@@ -319,7 +320,22 @@ async def batch_create_workouts(workouts: list[dict]) -> dict | list:
         List of created queue items.
     """
     try:
-        return await client.create_queue_items_batch(workouts)
+        items: list[dict] = []
+        for w in workouts:
+            comp = w.workoutData
+            if comp.id is None:
+                comp = comp.model_copy(update={"id": str(uuid.uuid4())})
+            body: dict = {
+                "activityType": w.activityType,
+                "title": w.title,
+                "workoutData": comp.wire_dict(),
+            }
+            if w.description is not None:
+                body["description"] = w.description
+            if w.planId is not None:
+                body["planId"] = w.planId
+            items.append(body)
+        return await client.create_queue_items_batch(items)
     except Exception as e:
         logger.exception(f"Error in batch_create_workouts: {e}")
         return {"error": str(e)}

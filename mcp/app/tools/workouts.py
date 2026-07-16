@@ -4,6 +4,7 @@ import logging
 
 from fastmcp import FastMCP
 
+from app.schemas import SummaryPeriod
 from app.services.api_client import client
 
 logger = logging.getLogger(__name__)
@@ -175,7 +176,7 @@ async def delete_workout(workout_id: str) -> dict | list:
 @workouts_router.tool
 async def get_training_summary(
     activity_type: str | None = None,
-    period: str = "month",
+    period: SummaryPeriod = "month",
 ) -> dict | list:
     """
     Get aggregated training summary grouped by time period.

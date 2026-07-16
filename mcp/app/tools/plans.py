@@ -5,6 +5,7 @@ from typing import Any
 
 from fastmcp import FastMCP
 
+from app.schemas import PlanStatus, WeeklyDays
 from app.services.api_client import client
 
 logger = logging.getLogger(__name__)
@@ -81,7 +82,7 @@ async def get_plan(plan_id: str) -> dict | list:
 
 @plans_router.tool
 async def list_plans(
-    status: str | None = None,
+    status: PlanStatus | None = None,
     activity_type: str | None = None,
 ) -> dict | list:
     """List training plans.
@@ -104,7 +105,7 @@ async def list_plans(
 async def update_plan(
     plan_id: str,
     name: str | None = None,
-    status: str | None = None,
+    status: PlanStatus | None = None,
     description: str | None = None,
     metadata: dict[str, Any] | None = None,
     end_date: str | None = None,
@@ -164,7 +165,7 @@ async def set_strength_schedule(
     plan_id: str,
     start_date: str,
     weeks: int,
-    days: dict[str, dict],
+    days: WeeklyDays,
     time: str | None = None,
     timezone: str | None = None,
 ) -> dict | list:
@@ -187,9 +188,8 @@ async def set_strength_schedule(
             create_plan with activity_type "strength").
         start_date: First week's anchor date (YYYY-MM-DD).
         weeks: How many weeks the cycle runs (1–52).
-        days: Map of weekday -> routine reference. Weekday keys are lowercase
-            three-letter: "mon","tue","wed","thu","fri","sat","sun". Each value
-            is {"title": str, "routineId": str|null}. Example:
+        days: Which weekday gets which routine — set only the days that have
+            a session. Example:
             {
                 "mon": {"title": "Lower", "routineId": "hevy-abc"},
                 "wed": {"title": "Upper Push", "routineId": "hevy-def"},
@@ -206,7 +206,7 @@ async def set_strength_schedule(
         schedule: dict[str, Any] = {
             "startDate": start_date,
             "weeks": weeks,
-            "days": days,
+            "days": days.model_dump(exclude_none=True),
         }
         if time is not None:
             schedule["time"] = time

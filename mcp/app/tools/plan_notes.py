@@ -15,6 +15,7 @@ from typing import Any
 
 from fastmcp import FastMCP
 
+from app.schemas import NoteKind
 from app.services.api_client import client
 
 logger = logging.getLogger(__name__)
@@ -68,7 +69,7 @@ async def get_plan_context(
 
 @plan_notes_router.tool
 async def append_plan_note(
-    kind: str,
+    kind: NoteKind,
     summary: str,
     body: str | None = None,
     importance: int = 2,
@@ -149,7 +150,7 @@ async def append_plan_note(
 @plan_notes_router.tool
 async def list_plan_notes(
     plan_id: str | None = None,
-    kind: str | None = None,
+    kind: NoteKind | None = None,
     conversation_id: str | None = None,
     since_days: int | None = None,
     include_expired: bool = False,
@@ -190,7 +191,7 @@ async def list_plan_notes(
 @plan_notes_router.tool
 async def update_plan_note(
     note_id: str,
-    kind: str | None = None,
+    kind: NoteKind | None = None,
     summary: str | None = None,
     body: str | None = None,
     importance: int | None = None,
