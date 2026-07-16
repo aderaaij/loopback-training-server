@@ -63,6 +63,9 @@ purpose. Don't "normalize" one side without the other.
 Login is rate-limited (5/min/IP). On any 401 the SPA wipes its token and returns to
 the login screen. The bearer token lives in localStorage (`loopback.*` keys).
 
+Remaining dashboard work (pending admin/password/token endpoints, polish list):
+see `docs/dashboard-next-steps.md`.
+
 ## Development
 
 ```bash

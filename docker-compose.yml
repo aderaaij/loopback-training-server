@@ -28,6 +28,9 @@ services:
     env_file: ./backend/config/.env
     environment:
       DB_HOST: db
+      # Overrides any ENVIRONMENT in the env_file: run `fastapi run` (production),
+      # not the `fastapi dev` file-watcher (see backend/scripts/start.sh).
+      ENVIRONMENT: PRODUCTION
     restart: unless-stopped
 
 volumes:
