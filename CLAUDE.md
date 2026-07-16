@@ -61,9 +61,13 @@ snake_case; plan-notes are mixed. `frontend/src/lib/types.ts` mirrors this exact
 purpose. Don't "normalize" one side without the other.
 
 Login is rate-limited (5/min/IP). On any 401 the SPA wipes its token and returns to
-the login screen. The bearer token lives in localStorage (`loopback.*` keys).
+the login screen. The bearer token lives in localStorage (`loopback.*` keys). Because
+of that 401 contract, auth endpoints signal "wrong password" with **400, never 401**.
 
-Remaining dashboard work (pending admin/password/token endpoints, polish list):
+Account management is fully in the dashboard (admin CRUD on `/api/admin/users` —
+role-guarded, deactivation revokes all tokens; self-service `POST /api/auth/password`
++ `POST /api/auth/tokens`). New passwords require ≥8 chars; the CLI (`app.cli`)
+remains as a fallback. Remaining dashboard work (polish list):
 see `docs/dashboard-next-steps.md`.
 
 ## Development
@@ -83,7 +87,7 @@ The API runs on port **8001**. Auth is via `Authorization: Bearer <API_KEY>` hea
 
 Models live in `backend/app/models/`. Key tables:
 - **Workout** - recorded workouts with splits, heart rate, JSONB metadata. Aggregates *all* HealthKit workouts by source — running (Apple), Strava rides, Bend flexibility, Garmin, and **Hevy strength** (source `com.hevyapp.hevy`, activity `traditionalStrength`). There is **no Hevy API integration**; strength sessions arrive via HealthKit sync like everything else.
-- **WorkoutQueue** - structured workouts queued for Apple Watch sync (status: pending/fetched/synced/completed). `scheduled_date` is a first-class indexed column (kept in sync with `workout_data.scheduledDate`, which the iOS app still reads) so the schedule is queryable and can be conflict-checked.
+- **WorkoutQueue** - structured workouts queued for Apple Watch sync (status: pending/fetched/synced/completed/skipped). Posting missed-workout feedback with `action: "skip"` retires the queue item to `skipped` (feedback `workoutId` == queue item id): the watch endpoints stop serving it and it no longer counts as a schedule collision. One-way; never downgrades `completed`. `scheduled_date` is a first-class indexed column (kept in sync with `workout_data.scheduledDate`, which the iOS app still reads) so the schedule is queryable and can be conflict-checked.
 - **Plan** - training plans with JSONB metadata (goals, guardrails, phases). Metadata may also hold a **`schedule`** — a recurring weekly cadence `{startDate, weeks, days: {mon: {title, routineId}, ...}, time, timezone}`. Used for strength/Hevy cycles: each weekday slot references a **Hevy routine** (opaque `routineId` + title; the LLM looks these up via the separate `hevy-mcp` and passes them in — this API never resolves them). Strength slots are plan markers only; they are **not** pushed to the Apple Watch. Completed strength sessions auto-match to schedule dates via the `traditionalStrength` workouts Hevy syncs in.
 - **PlanNote** - cross-conversation continuity notes (decisions, preferences, life context). LLM reads via `get_plan_context`, writes via `append_plan_note`.
 - **DailyHealthMetrics** - daily HealthKit data (sleep, HR, HRV, weight, VO2Max, etc.)

@@ -2,10 +2,13 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { api } from './api'
 import { toDateKey, addDays } from './format'
 import type {
+  AdminUserRow,
   CalendarResponse,
+  ChangePasswordResponse,
   FeedbackItem,
   HealthMetricsDay,
   MeResponse,
+  MintedToken,
   Plan,
   PlanNote,
   PlanNoteContext,
@@ -32,6 +35,56 @@ export function useRevokeToken() {
   return useMutation({
     mutationFn: (tokenId: string) => api.delete(`/api/auth/tokens/${tokenId}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
+  })
+}
+
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (body: { currentPassword: string; newPassword: string }) =>
+      api.post<ChangePasswordResponse>('/api/auth/password', body),
+  })
+}
+
+export function useMintToken() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { name: string; expiresAt?: string }) => api.post<MintedToken>('/api/auth/tokens', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
+  })
+}
+
+// ── admin users ──
+
+export function useAdminUsers(enabled: boolean) {
+  return useQuery({
+    queryKey: ['admin-users'],
+    queryFn: () => api.get<AdminUserRow[]>('/api/admin/users'),
+    enabled,
+  })
+}
+
+export function useCreateUser() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { username: string; password: string; displayName?: string; role?: string }) =>
+      api.post<AdminUserRow>('/api/admin/users', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
+  })
+}
+
+export function useResetUserPassword() {
+  return useMutation({
+    mutationFn: ({ id, password }: { id: string; password: string }) =>
+      api.post(`/api/admin/users/${id}/password`, { password }),
+  })
+}
+
+export function useSetUserActive() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      api.patch<AdminUserRow>(`/api/admin/users/${id}`, { isActive }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
   })
 }
 

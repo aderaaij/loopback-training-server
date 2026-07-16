@@ -13,6 +13,42 @@ import '../styles/screens.css'
 const KNOWN_KEYS = new Set(['goals', 'guardrails', 'phases', 'athlete_context', 'background', 'schedule'])
 const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 
+const GOAL_KEYS = new Set(['type', 'target', 'unit', 'by_week', 'description', 'detail', 'note'])
+
+/**
+ * Goals/guardrails are LLM-authored with an open schema — usually strings or
+ * {type, target?, unit?, by_week?, detail?|description?} objects. Compose a
+ * readable line from the known keys ("Weekly volume: 20 km by week 4") and
+ * never let an object hit String() ("[object Object]").
+ */
+function fmtGoal(g: unknown): string {
+  if (typeof g === 'string') return g
+  if (typeof g !== 'object' || g == null) return String(g)
+  const o = g as Record<string, unknown>
+
+  const bits: string[] = []
+  const target =
+    o.target !== undefined ? String(o.target) + (typeof o.unit === 'string' ? ` ${o.unit}` : '') : null
+  const numeric = [target, o.by_week !== undefined ? `by week ${String(o.by_week)}` : null]
+    .filter(Boolean)
+    .join(' ')
+  if (numeric) bits.push(numeric)
+  for (const key of ['description', 'detail', 'note']) {
+    if (typeof o[key] === 'string') bits.push(o[key] as string)
+  }
+  // Unknown keys still show up rather than getting silently dropped.
+  for (const [key, value] of Object.entries(o)) {
+    if (!GOAL_KEYS.has(key)) bits.push(`${key}: ${typeof value === 'string' ? value : JSON.stringify(value)}`)
+  }
+
+  const type = typeof o.type === 'string' ? o.type.replace(/_/g, ' ') : null
+  const title = type ? type.charAt(0).toUpperCase() + type.slice(1) : null
+  if (title && bits.length > 0) return `${title}: ${bits.join(' · ')}`
+  if (title) return title
+  if (bits.length > 0) return bits.join(' · ')
+  return JSON.stringify(g)
+}
+
 function phaseWeekLabel(phase: PlanPhase, index: number): string {
   if (phase.weeks != null) return typeof phase.weeks === 'number' ? `W${phase.weeks}` : String(phase.weeks)
   return `W${index + 1}`
@@ -108,7 +144,7 @@ export function PlanDetail() {
                   <span className="g-check">
                     <Check size={12} weight="bold" />
                   </span>
-                  <span className="g-text">{String(g)}</span>
+                  <span className="g-text">{fmtGoal(g)}</span>
                 </div>
               ))}
             </div>
@@ -121,7 +157,7 @@ export function PlanDetail() {
               {guardrails.map((g, i) => (
                 <div className="guardrail-row" key={i}>
                   <Warning size={16} weight="fill" color="var(--amber)" style={{ flexShrink: 0, marginTop: 1 }} />
-                  <span className="g-text">{String(g)}</span>
+                  <span className="g-text">{fmtGoal(g)}</span>
                 </div>
               ))}
             </div>

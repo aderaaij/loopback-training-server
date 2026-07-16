@@ -35,6 +35,28 @@ export interface MeResponse {
   tokens: ApiTokenInfo[]
 }
 
+export interface ChangePasswordResponse {
+  revokedTokens: number
+}
+
+/** POST /api/auth/tokens — the raw token is shown exactly once. */
+export interface MintedToken {
+  token: string
+  tokenId: string
+}
+
+// ── admin users (camelCase) ──
+
+export interface AdminUserRow {
+  id: string
+  username: string
+  displayName: string
+  role: string
+  isActive: boolean
+  tokenCount: number
+  lastSeenAt: string | null
+}
+
 // ── workouts (snake_case) ──
 
 export interface WorkoutListItem {
@@ -185,9 +207,16 @@ export interface PlanPhase {
   [key: string]: unknown
 }
 
+/**
+ * Goals are usually objects like {type: "weekly_volume", target: 20, unit:
+ * "km", by_week: 4} or {type, detail|description}, but the schema is
+ * LLM-authored and open — render via PlanDetail's formatter, never String().
+ */
+export type PlanGoal = string | Record<string, unknown>
+
 export interface PlanMetadata {
-  goals?: string[]
-  guardrails?: string[]
+  goals?: PlanGoal[]
+  guardrails?: PlanGoal[]
   phases?: PlanPhase[]
   athlete_context?: string
   background?: string

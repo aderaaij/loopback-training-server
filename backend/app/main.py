@@ -8,7 +8,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app.auth import get_current_user
 from app.rate_limit import limiter
-from app.routes import actions, auth, feedback, health, health_metrics, inventory, plan_notes, plans, queue, schedule, workouts
+from app.routes import actions, admin, auth, feedback, health, health_metrics, inventory, plan_notes, plans, queue, schedule, workouts
 
 app = FastAPI(title="Training API", version="0.1.0")
 
@@ -55,6 +55,7 @@ api_router.include_router(health_metrics.router, prefix="/health/metrics", tags=
 api_router.include_router(plans.router, prefix="/plans", tags=["plans"])
 api_router.include_router(plan_notes.router, prefix="/plan-notes", tags=["plan-notes"])
 api_router.include_router(schedule.router, prefix="/schedule", tags=["schedule"])
+api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 app.include_router(api_router)
 
 

@@ -1,13 +1,15 @@
-import { Brain, Desktop, DeviceMobile, Key, Plus, SignOut } from '@phosphor-icons/react'
+import { Brain, Check, Copy, Desktop, DeviceMobile, Key, Plus, SignOut } from '@phosphor-icons/react'
 import type { Icon } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { usePageHeader } from '../components/PageHeader'
-import { ConfirmDialog, ErrorNote, Loading, SectionLabel } from '../components/ui'
+import { ConfirmDialog, ErrorNote, Loading, Modal, SectionLabel } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { fmtDayYear, relTime } from '../lib/format'
-import { useMe, useRevokeToken } from '../lib/queries'
+import { useChangePassword, useMe, useMintToken, useRevokeToken } from '../lib/queries'
 import type { ApiTokenInfo } from '../lib/types'
 import '../styles/settings.css'
+
+const MIN_PASSWORD = 8
 
 function tokenIcon(name: string): Icon {
   const n = name.toLowerCase()
@@ -28,12 +30,210 @@ function tokenMeta(t: ApiTokenInfo): string {
   return parts.join(' · ')
 }
 
+function ChangePasswordModal({ onClose }: { onClose: () => void }) {
+  const change = useChangePassword()
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [confirm, setConfirm] = useState('')
+
+  const mismatch = confirm.length > 0 && next !== confirm
+  const valid = current.length > 0 && next.length >= MIN_PASSWORD && next === confirm
+
+  if (change.isSuccess) {
+    const revoked = change.data.revokedTokens
+    return (
+      <Modal onClose={onClose} width={420}>
+        <div className="display" style={{ fontSize: 20, fontWeight: 600 }}>
+          Password changed
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--text-3)', lineHeight: 1.55, margin: '10px 0 22px' }}>
+          {revoked > 0
+            ? `${revoked} other ${revoked === 1 ? 'session was' : 'sessions were'} signed out. This device stays logged in.`
+            : 'No other sessions existed. This device stays logged in.'}
+        </div>
+        <button className="btn-accent" style={{ width: '100%' }} onClick={onClose}>
+          Done
+        </button>
+      </Modal>
+    )
+  }
+
+  return (
+    <Modal onClose={onClose} width={420}>
+      <div className="display" style={{ fontSize: 20, fontWeight: 600 }}>
+        Change password
+      </div>
+      <div style={{ fontSize: 12.5, color: 'var(--muted)', margin: '5px 0 20px' }}>
+        Changing it signs out every other session; this device stays logged in.
+      </div>
+
+      <div className="field-label">Current password</div>
+      <input
+        className="field-input"
+        style={{ marginBottom: 14 }}
+        type="password"
+        autoComplete="current-password"
+        autoFocus
+        value={current}
+        onChange={(e) => setCurrent(e.target.value)}
+      />
+
+      <div className="field-label">New password (min {MIN_PASSWORD} characters)</div>
+      <input
+        className="field-input"
+        style={{ marginBottom: 14 }}
+        type="password"
+        autoComplete="new-password"
+        value={next}
+        onChange={(e) => setNext(e.target.value)}
+      />
+
+      <div className="field-label">Confirm new password</div>
+      <input
+        className="field-input"
+        type="password"
+        autoComplete="new-password"
+        value={confirm}
+        onChange={(e) => setConfirm(e.target.value)}
+      />
+      {mismatch && (
+        <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 6 }}>Passwords don't match.</div>
+      )}
+
+      {change.error != null && (
+        <div style={{ marginTop: 12 }}>
+          <ErrorNote error={change.error} />
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
+        <button className="btn-ghost" style={{ flex: 1 }} onClick={onClose}>
+          Cancel
+        </button>
+        <button
+          className="btn-accent"
+          style={{ flex: 1 }}
+          disabled={!valid || change.isPending}
+          onClick={() => change.mutate({ currentPassword: current, newPassword: next })}
+        >
+          {change.isPending ? 'Saving…' : 'Change password'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+const EXPIRY_CHOICES: { label: string; days: number | null }[] = [
+  { label: 'Never', days: null },
+  { label: '30 days', days: 30 },
+  { label: '90 days', days: 90 },
+  { label: '1 year', days: 365 },
+]
+
+function NewTokenModal({ onClose }: { onClose: () => void }) {
+  const mint = useMintToken()
+  const [name, setName] = useState('')
+  const [expiryDays, setExpiryDays] = useState<number | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  const submit = () => {
+    const expiresAt =
+      expiryDays == null ? undefined : new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000).toISOString()
+    mint.mutate({ name: name.trim(), expiresAt })
+  }
+
+  if (mint.isSuccess) {
+    return (
+      <Modal onClose={onClose} width={460}>
+        <div className="display" style={{ fontSize: 20, fontWeight: 600 }}>
+          Token created
+        </div>
+        <div style={{ fontSize: 12.5, color: 'var(--muted)', margin: '5px 0 14px' }}>
+          Copy it now — it's shown <strong style={{ color: 'var(--amber)' }}>only this once</strong> and can't be
+          retrieved later. Use it as <span style={{ fontFamily: 'var(--font-mono)' }}>Authorization: Bearer …</span>
+        </div>
+        <div className="cli-box" style={{ marginTop: 0, wordBreak: 'break-all', whiteSpace: 'pre-wrap', userSelect: 'all' }}>
+          {mint.data.token}
+        </div>
+        <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+          <button className="btn-ghost" style={{ flex: 1 }} onClick={onClose}>
+            Done
+          </button>
+          <button
+            className="btn-accent"
+            style={{ flex: 1 }}
+            onClick={() => {
+              void navigator.clipboard?.writeText(mint.data.token)
+              setCopied(true)
+            }}
+          >
+            {copied ? <Check size={15} weight="bold" /> : <Copy size={15} />}
+            {copied ? 'Copied' : 'Copy token'}
+          </button>
+        </div>
+      </Modal>
+    )
+  }
+
+  return (
+    <Modal onClose={onClose} width={460}>
+      <div className="display" style={{ fontSize: 20, fontWeight: 600 }}>
+        New token
+      </div>
+      <div style={{ fontSize: 12.5, color: 'var(--muted)', margin: '5px 0 20px' }}>
+        For hooking up a device or integration (e.g. a personal MCP) without logging in there.
+      </div>
+
+      <div className="field-label">Name</div>
+      <input
+        className="field-input"
+        style={{ marginBottom: 14 }}
+        placeholder="Coach MCP"
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+
+      <div className="field-label">Expires</div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        {EXPIRY_CHOICES.map((c) => (
+          <button
+            key={c.label}
+            className={`filter-chip${expiryDays === c.days ? ' on' : ''}`}
+            style={{ flex: 1 }}
+            onClick={() => setExpiryDays(c.days)}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+
+      {mint.error != null && (
+        <div style={{ marginTop: 12 }}>
+          <ErrorNote error={mint.error} />
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
+        <button className="btn-ghost" style={{ flex: 1 }} onClick={onClose}>
+          Cancel
+        </button>
+        <button className="btn-accent" style={{ flex: 1 }} disabled={!name.trim() || mint.isPending} onClick={submit}>
+          {mint.isPending ? 'Creating…' : 'Create token'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
 export function Settings() {
   const { user, tokenId, logout } = useAuth()
   const { data, isLoading, error } = useMe()
   const revoke = useRevokeToken()
   const [revoking, setRevoking] = useState<ApiTokenInfo | null>(null)
   const [confirmLogout, setConfirmLogout] = useState(false)
+  const [changingPassword, setChangingPassword] = useState(false)
+  const [mintingToken, setMintingToken] = useState(false)
 
   usePageHeader('Settings', data ? `${data.tokens.length} active tokens` : undefined)
 
@@ -55,29 +255,20 @@ export function Settings() {
             {me?.username} · {me?.role === 'admin' ? 'Admin' : 'Member'}
           </div>
         </div>
-        <button
-          className="pending-btn"
-          title="The change-password endpoint isn't built yet — an admin can reset it via CLI."
-          disabled
-        >
+        <button className="btn-ghost" style={{ padding: '9px 16px', fontSize: 13 }} onClick={() => setChangingPassword(true)}>
           Change password
-          <span className="pending-tag">BACKEND PENDING</span>
         </button>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <SectionLabel>Devices &amp; tokens</SectionLabel>
         <button
-          className="pending-btn"
+          className="btn-accent"
           style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 13px', fontSize: 12 }}
-          title="Self-service token minting isn't built yet — today a token is created by login or CLI."
-          disabled
+          onClick={() => setMintingToken(true)}
         >
           <Plus size={14} />
           New token
-          <span className="pending-tag" style={{ display: 'inline', marginTop: 0 }}>
-            PENDING
-          </span>
         </button>
       </div>
 
@@ -124,6 +315,9 @@ export function Settings() {
           Log out · revoke this session
         </button>
       </div>
+
+      {changingPassword && <ChangePasswordModal onClose={() => setChangingPassword(false)} />}
+      {mintingToken && <NewTokenModal onClose={() => setMintingToken(false)} />}
 
       {revoking && (
         <ConfirmDialog

@@ -28,22 +28,6 @@
   color: var(--accent);
 }
 
-.pending-btn {
-  padding: 9px 16px;
-  border-radius: 11px;
-  background: var(--tile-bg);
-  border: 1px solid var(--border-strong);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: not-allowed;
-  opacity: 0.85;
-  text-align: left;
-}
-.pending-btn .pending-tag {
-  display: block;
-  margin-top: 2px;
-}
-
 .token-list {
   border-radius: 18px;
   background: var(--card);
@@ -74,7 +58,7 @@
   color: var(--muted);
   margin-top: 3px;
 }
-.token-row .t-this {
+.t-this {
   font-size: 9px;
   font-weight: 600;
   color: var(--green);
@@ -83,11 +67,15 @@
   border-radius: 6px;
   text-transform: uppercase;
 }
-.token-row .t-action {
+.t-action {
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+}
+.t-action:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 /* ═══ users (admin) ═══ */
@@ -103,16 +91,6 @@
   margin-bottom: 14px;
   flex-wrap: wrap;
 }
-.pending-banner {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--amber);
-  background: rgba(232, 163, 61, 0.14);
-  padding: 3px 9px;
-  border-radius: 7px;
-  text-transform: uppercase;
-}
-
 .users-table {
   border-radius: 18px;
   background: var(--card);
@@ -122,10 +100,16 @@
 .users-table .u-head,
 .users-table .u-row {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr 0.8fr;
+  grid-template-columns: 2fr 0.9fr 0.7fr 1fr 0.8fr 1.4fr;
   gap: 12px;
   align-items: center;
   padding: 13px 20px;
+}
+.u-actions {
+  display: flex;
+  gap: 14px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
 }
 .users-table .u-head {
   border-bottom: 1px solid var(--border);
@@ -156,7 +140,7 @@
 @media (max-width: 700px) {
   .users-table .u-head,
   .users-table .u-row {
-    grid-template-columns: 2fr 1fr 0.8fr;
+    grid-template-columns: 2fr 0.8fr 1.2fr;
   }
   .users-table .hide-sm {
     display: none;

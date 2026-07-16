@@ -60,6 +60,9 @@ def wire(engine, session_factory, monkeypatch):
     app.dependency_overrides[_get_db] = override_get_db
     # _touch_last_used opens its own session — point it at the test DB too.
     monkeypatch.setattr(auth_module, "SessionLocal", session_factory)
+    # All TestClient requests share one client IP, so the login rate limit
+    # (5/min) bleeds across tests unless cleared.
+    app.state.limiter.reset()
 
     with engine.begin() as c:
         for table in reversed(Base.metadata.sorted_tables):
@@ -95,6 +98,16 @@ def user_a(session_factory):
 @pytest.fixture()
 def user_b(session_factory):
     return _make_user(session_factory, "bob")
+
+
+@pytest.fixture()
+def admin_user(session_factory):
+    return _make_user(session_factory, "root", role="admin")
+
+
+@pytest.fixture()
+def client_admin(admin_user):
+    return _client(admin_user[1])
 
 
 @pytest.fixture()

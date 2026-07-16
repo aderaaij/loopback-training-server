@@ -231,13 +231,6 @@ a:focus-visible {
   white-space: nowrap;
 }
 
-.pending-tag {
-  font-family: var(--font-mono);
-  font-size: 8.5px;
-  letter-spacing: 0.3px;
-  color: var(--amber);
-}
-
 .btn-accent {
   display: inline-flex;
   align-items: center;

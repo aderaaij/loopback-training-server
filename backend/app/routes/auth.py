@@ -6,18 +6,20 @@ while `me` and token revocation enforce auth via the CurrentUser parameter.
 
 import uuid
 from datetime import datetime
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Request, status
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
-from app.auth import CurrentUser
+from app.auth import CurrentUser, security
 from app.database import DbSession
 from app.models.api_token import ApiToken
 from app.models.user import User
 from app.rate_limit import limiter
-from app.security import generate_token, hash_token, verify_password
+from app.security import generate_token, hash_password, hash_token, verify_password
 
 router = APIRouter()
 
@@ -58,6 +60,34 @@ class MeResponse(_CamelModel):
     tokens: list[TokenOut]
 
 
+class ChangePasswordRequest(_CamelModel):
+    current_password: str
+    new_password: str = Field(min_length=8)
+
+
+class ChangePasswordResponse(_CamelModel):
+    # Other sessions signed out by the change (this one stays valid).
+    revoked_tokens: int
+
+
+class MintTokenRequest(_CamelModel):
+    name: str
+    expires_at: AwareDatetime | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _name_not_blank(cls, v: str) -> str:
+        v = v.strip()
+        if not (1 <= len(v) <= 100):
+            raise ValueError("name must be 1-100 characters")
+        return v
+
+
+class MintTokenResponse(_CamelModel):
+    token: str  # shown exactly once, same rule as login
+    token_id: uuid.UUID
+
+
 @router.post("/login", response_model=LoginResponse)
 @limiter.limit("5/minute")
 def login(request: Request, body: LoginRequest, db: DbSession) -> LoginResponse:
@@ -87,6 +117,37 @@ def me(user: CurrentUser, db: DbSession) -> MeResponse:
         select(ApiToken).where(ApiToken.user_id == user.id).order_by(ApiToken.created_at)
     ).all()
     return MeResponse(user=UserOut.model_validate(user), tokens=[TokenOut.model_validate(t) for t in tokens])
+
+
+@router.post("/password", response_model=ChangePasswordResponse)
+def change_password(
+    body: ChangePasswordRequest,
+    user: CurrentUser,
+    db: DbSession,
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
+) -> ChangePasswordResponse:
+    # 400 (not 401) on a wrong current password — the SPA treats any 401 as
+    # "token dead" and would log the whole session out.
+    if user.password_hash is None or not verify_password(user.password_hash, body.current_password):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
+    user.password_hash = hash_password(body.new_password)
+    result = db.execute(
+        delete(ApiToken).where(
+            ApiToken.user_id == user.id, ApiToken.token_hash != hash_token(credentials.credentials)
+        )
+    )
+    db.commit()
+    return ChangePasswordResponse(revoked_tokens=result.rowcount)
+
+
+@router.post("/tokens", response_model=MintTokenResponse, status_code=status.HTTP_201_CREATED)
+def mint_token(body: MintTokenRequest, user: CurrentUser, db: DbSession) -> MintTokenResponse:
+    raw = generate_token()
+    token = ApiToken(user_id=user.id, token_hash=hash_token(raw), name=body.name, expires_at=body.expires_at)
+    db.add(token)
+    db.commit()
+    db.refresh(token)
+    return MintTokenResponse(token=raw, token_id=token.id)
 
 
 @router.delete("/tokens/{token_id}", status_code=status.HTTP_204_NO_CONTENT)
