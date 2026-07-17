@@ -294,8 +294,8 @@ function ActivePlanCard() {
 
 function Attention() {
   const navigate = useNavigate()
-  const { data: pending, isSuccess: pendingOk } = useQueue('pending')
-  const { data: feedback, isSuccess: feedbackOk } = useFeedback()
+  const { data: pending } = useQueue('pending')
+  const { data: feedback } = useFeedback()
 
   const pendingCount = pending?.length ?? 0
   const unacked = (feedback ?? []).filter((f) => !f.acknowledgedAt && !f.dismissed)
@@ -318,16 +318,13 @@ function Attention() {
     })
   }
 
+  if (items.length === 0) return null
+
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
       <div style={{ padding: '17px 20px 13px' }}>
         <SectionLabel>Needs attention</SectionLabel>
       </div>
-      {items.length === 0 && (
-        <div style={{ padding: '2px 20px 18px', fontSize: 13, color: 'var(--muted)' }}>
-          {pendingOk && feedbackOk ? 'All clear.' : '…'}
-        </div>
-      )}
       {items.map((a) => (
         <button className="row-item" key={a.title} onClick={() => navigate('/queue')}>
           <a.icon size={26} weight="fill" color={a.color} style={{ flexShrink: 0 }} />
