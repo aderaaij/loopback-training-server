@@ -29,7 +29,7 @@ mcp = FastMCP(
     Today's date is {date.today().isoformat()}.
 
     Provides access to workout tracking data and a training queue for planning workouts.
-    This is a single-user system — no user discovery step is needed.
+    Data is scoped to the authenticated user — no user discovery step is needed.
 
     CONTINUITY (read this first):
     The user discusses their training across MANY separate conversations. To make

@@ -114,6 +114,7 @@ The MCP server (`mcp/`) exposes training data to Claude via FastMCP. It talks to
 - Runs as a separate systemd service (`training-mcp`) on port **8590** — native FastMCP streamable HTTP at `/mcp` since 2026-07-17 (`MCP_TRANSPORT=http` in the unit, no supergateway; stdio remains the default transport for direct clients). Rollback: `training-mcp.service.pre-native.bak`
 - Config: `~/.config/systemd/user/training-mcp.service`
 - Env: `mcp/config/.env` (needs `TRAINING_API_URL` and `TRAINING_API_KEY`)
+- **Token passthrough (multi-user):** an `Authorization` header on the incoming MCP request is forwarded to the backend as-is, so each caller acts as their own Training API user; any presented header disables the fallback (a bad token fails, never silently downgrades). With no header, `TRAINING_API_KEY` (an athlete token, not admin) is the fallback — set `REQUIRE_AUTH_HEADER=true` in the unit/env to disable the fallback once multiple users have network access to :8590. Note: FastMCP's `get_http_headers()` strips `authorization` unless included explicitly (`include={"authorization"}`).
 
 ## Deployment
 

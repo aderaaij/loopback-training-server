@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 import httpx
+from fastmcp.server.dependencies import get_http_headers
 
 from app.config import settings
 
@@ -18,25 +19,39 @@ class TrainingClient:
         self.timeout = settings.request_timeout
         self._api_key = settings.training_api_key.get_secret_value()
 
-    def _ensure_configured(self) -> None:
-        """Raise an error if the API key is not configured."""
+    def _resolve_auth(self) -> str:
+        """Resolve the Authorization header for this request.
+
+        An Authorization header on the incoming MCP request is forwarded as-is,
+        so each caller acts as their own Training API user. Any presented header
+        disables the fallback — a malformed credential must fail, not silently
+        act as the fallback user. Outside an HTTP request context (stdio) or
+        with no header, the env token is used unless REQUIRE_AUTH_HEADER is set.
+        """
+        # get_http_headers() strips `authorization` unless explicitly included
+        incoming = get_http_headers(include={"authorization"}).get("authorization", "").strip()
+        if incoming:
+            return incoming
+        if settings.require_auth_header:
+            raise ValueError(
+                "This MCP requires a per-user token: send an 'Authorization: Bearer "
+                "<training-api token>' header with the request."
+            )
         if not self._api_key:
             from app.config import Settings
 
             env_file = Settings.model_config.get("env_file")
-            raise ValueError(f"TRAINING_API_KEY is not configured. Please set it in: {env_file}")
-
-    @property
-    def headers(self) -> dict[str, str]:
-        """Get headers for API requests."""
-        return {
-            "Authorization": f"Bearer {self._api_key}",
-            "Content-Type": "application/json",
-        }
+            raise ValueError(
+                f"No Authorization header on the request and TRAINING_API_KEY is not set (expected in: {env_file})"
+            )
+        return f"Bearer {self._api_key}"
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> list | dict:
         """Make an HTTP request to the Training API."""
-        self._ensure_configured()
+        headers = {
+            "Authorization": self._resolve_auth(),
+            "Content-Type": "application/json",
+        }
         url = f"{self.base_url}{path}"
         logger.debug(f"Making {method} request to {url}")
 
@@ -44,12 +59,12 @@ class TrainingClient:
             response = await http_client.request(
                 method=method,
                 url=url,
-                headers=self.headers,
+                headers=headers,
                 **kwargs,
             )
 
             if response.status_code == 401:
-                raise ValueError("Invalid API key. Check your TRAINING_API_KEY configuration.")
+                raise ValueError("Training API rejected the token (invalid, expired, or revoked).")
             if response.status_code == 404:
                 raise ValueError(f"Resource not found: {path}")
 

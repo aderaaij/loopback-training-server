@@ -25,6 +25,11 @@ class Settings(BaseSettings):
         description="API key for authenticating with Training API",
     )
 
+    require_auth_header: bool = Field(
+        default=False,
+        description="Require callers to present their own Authorization header (disables the TRAINING_API_KEY fallback)",
+    )
+
     log_level: str = Field(default="INFO", description="Logging level")
     request_timeout: int = Field(default=30, description="HTTP request timeout in seconds")
 
