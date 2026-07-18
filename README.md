@@ -6,6 +6,14 @@ Built with FastAPI, PostgreSQL, SQLAlchemy, and React. Includes an optional MCP 
 
 > **Naming note:** this is the companion server for the Loopback running app — no relation to the [LoopBack](https://loopback.io) Node.js framework or Rogue Amoeba's Loopback audio tool. The technical name used throughout the codebase (packages, containers, DB) is `training-api`.
 
+![Overview — health snapshot, upcoming sessions, active plan](.github/assets/overview.png)
+
+| Workout detail | Health trends |
+|---|---|
+| ![Workout detail — heart rate, splits, cadence](.github/assets/workout.png) | ![Health trends — recovery, sleep, weight, steps](.github/assets/health.png) |
+
+*Demo data shown; every screen is scoped to the signed-in athlete.*
+
 ## Features
 
 - **Workout storage** — CRUD API for workouts with activity type, distance, duration, heart rate, splits, and arbitrary JSONB data
