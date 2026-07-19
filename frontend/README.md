@@ -6,7 +6,7 @@ unauthenticated server-rendered dashboard (disabled for security).
 - **Stack:** React 19 + TypeScript, Vite 8, React Compiler, TanStack Query,
   react-router, hand-rolled SVG charts, Leaflet (lazy chunk) for route maps.
 - **Design:** implements `Training Dashboard.dc.html` from the claude.ai/design
-  project; brief in `../docs/dashboard-design-brief.md`.
+  project.
 - **Serving:** built `dist/` is baked into the backend Docker image at
   `/app/static` and served same-origin by FastAPI (no CORS, Funnel unchanged).
 
