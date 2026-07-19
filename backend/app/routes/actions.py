@@ -6,6 +6,8 @@ from sqlalchemy import select
 from app.auth import CurrentUser
 from app.database import DbSession
 from app.models.action import WorkoutAction
+from app.models.queue import WorkoutQueue
+from app.routes.queue import _scheduled_date_from_data
 from app.schemas.action import ActionCreate, ActionRead
 from app.tenancy import get_owned
 
@@ -53,6 +55,18 @@ def create_actions_batch(payload: list[ActionCreate], db: DbSession, user: Curre
 @router.delete("/{action_id}", status_code=status.HTTP_200_OK)
 def acknowledge_action(action_id: uuid.UUID, db: DbSession, user: CurrentUser):
     action = get_owned(db, WorkoutAction, action_id, user)
+    # The app acks an action only after applying it on the watch — mirror the
+    # confirmed change onto the queue item so validation, /context, and future
+    # edits don't keep reading pre-action state.
+    item = db.get(WorkoutQueue, action.workout_id)
+    if item is not None and item.user_id == user.id:
+        if action.action == "edit" and action.composition is not None:
+            item.workout_data = action.composition
+            item.scheduled_date = _scheduled_date_from_data(action.composition) or item.scheduled_date
+        elif action.action == "delete" and item.status != "completed":
+            # Removed from the watch: retire the item like a skipped session
+            # so it stops counting as a scheduled run or schedule collision.
+            item.status = "skipped"
     db.delete(action)
     db.commit()
     return {"ok": True}
