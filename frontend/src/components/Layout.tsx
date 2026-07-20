@@ -20,26 +20,9 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useQueue } from '../lib/queries'
+import { LogoMark } from './LogoMark'
 import { usePageHeaderValue } from './PageHeader'
 import '../styles/layout.css'
-
-function LogoMark({ size = 30 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 32 32"
-      fill="none"
-      stroke="var(--accent)"
-      strokeWidth="2.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M27 16a11 11 0 1 1-3.3-7.8" />
-      <path d="M27 5.5v5h-5" />
-    </svg>
-  )
-}
 
 const NAV: { to: string; label: string; icon: Icon }[] = [
   { to: '/', label: 'Overview', icon: SquaresFour },

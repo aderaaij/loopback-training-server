@@ -1,4 +1,5 @@
 import { LockKey, WarningCircle } from '@phosphor-icons/react'
+import { LogoMark } from '../components/LogoMark'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
@@ -60,20 +61,10 @@ export function Login() {
         <span className="corner br" />
 
         <div className="login-brand">
-          <svg
-            width="38"
-            height="38"
-            viewBox="0 0 32 32"
-            fill="none"
-            stroke="var(--accent)"
-            strokeWidth="2.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+          <LogoMark
+            height={28}
             style={{ filter: 'drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 50%, transparent))' }}
-          >
-            <path d="M27 16a11 11 0 1 1-3.3-7.8" />
-            <path d="M27 5.5v5h-5" />
-          </svg>
+          />
           <div>
             <div className="brand-name">Loopback</div>
             <div className="brand-sub">SELF-HOSTED TRAINING</div>
