@@ -9,5 +9,6 @@ from app.models.plan_note import PlanNote
 from app.models.user import User
 from app.models.api_token import ApiToken
 from app.models.auth_event import AuthEvent
+from app.models.sleep_sample import SleepSample
 
-__all__ = ["Workout", "WorkoutQueue", "WorkoutAction", "WorkoutFeedback", "DailyHealthMetrics", "WorkoutInventory", "Plan", "PlanNote", "User", "ApiToken", "AuthEvent"]
+__all__ = ["Workout", "WorkoutQueue", "WorkoutAction", "WorkoutFeedback", "DailyHealthMetrics", "WorkoutInventory", "Plan", "PlanNote", "User", "ApiToken", "AuthEvent", "SleepSample"]
