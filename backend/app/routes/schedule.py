@@ -60,6 +60,14 @@ def build_calendar(db: DbSession, user_id: uuid.UUID | None, date_from: date, da
     # --- Recurring strength sessions from active plan schedules ---
     active_plans = db.scalars(active_plans_q).all()
 
+    # Queued runs may reference plans that are no longer active, so the
+    # active-plan set alone can't resolve every run's plan name.
+    plan_names = {p.id: p.name for p in active_plans}
+    missing_plan_ids = {r.plan_id for r in run_rows if r.plan_id and r.plan_id not in plan_names}
+    if missing_plan_ids:
+        for p in db.scalars(select(Plan).where(Plan.id.in_(missing_plan_ids))):
+            plan_names[p.id] = p.name
+
     entries: list[dict] = []
 
     for r in run_rows:
@@ -71,7 +79,7 @@ def build_calendar(db: DbSession, user_id: uuid.UUID | None, date_from: date, da
             "activityType": r.activity_type,
             "status": r.status,
             "planId": str(r.plan_id) if r.plan_id else None,
-            "planName": None,
+            "planName": plan_names.get(r.plan_id),
             "routineId": None,
             "completed": r.status == "completed",
             "conflict": False,
