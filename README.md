@@ -31,6 +31,7 @@ Built with FastAPI, PostgreSQL, SQLAlchemy, and React. Includes an optional MCP 
 - **Scheduling & calendar** — Attach a recurring weekly cadence to a plan and query a unified calendar that merges queued runs with scheduled strength sessions, flagging conflicts
 - **Plan validation** — A deterministic "linter" for upcoming schedules: weekly-ramp and taper checks, missing down weeks, back-to-back hard days, guardrail breaches, strength-day collisions — warnings, never blocks (`POST /api/plans/{id}/validate`, also returned when queueing)
 - **Health metrics** — Bulk upsert daily HealthKit metrics (sleep, HR, HRV, weight, VO2Max, steps, body composition) with date-based upsert
+- **Nutrition** — Daily dietary totals from HealthKit (energy, macros, fiber, sodium, water, caffeine + open-ended micronutrients), and a summary endpoint that aligns intake with body weight and training load per week or month, including protein g/kg — so diet can be read against performance in one query
 - **Plan-workout linking** — Link queued workouts to plans (`plan_id`) and recorded workouts to their planned counterpart (`plan_workout_id`) for planned-vs-actual analysis
 - **Multi-user** — Username/password accounts with per-device API tokens (`POST /api/auth/login`); all data is scoped per user
 - **Web dashboard** — Authenticated React SPA served same-origin by the API: overview, calendar, workouts, plans, health charts, and queue for athletes; user management and system monitoring for admins
@@ -91,7 +92,7 @@ docker compose -f docker-compose.demo.yml up -d
 python3 scripts/seed_demo.py        # stdlib only, no dependencies
 ```
 
-The seeder creates a synthetic athlete and ~16 weeks of realistic training through the public API: runs with splits, heart rate, cadence and GPS routes along the Lisbon riverfront, Hevy-style strength sessions, daily health metrics, a completed and an active training plan with a strength schedule, queued watch sessions (one skipped, with feedback), and coaching notes. The screenshots above are this data.
+The seeder creates a synthetic athlete and ~16 weeks of realistic training through the public API: runs with splits, heart rate, cadence and GPS routes along the Lisbon riverfront, Hevy-style strength sessions, daily health metrics, nutrition logs (deliberately imperfect: a fifth of days unlogged, one week missed, today still in progress), a completed and an active training plan with a strength schedule, queued watch sessions (one skipped, with feedback), and coaching notes. The screenshots above are this data.
 
 Then open `http://localhost:8011` and sign in as athlete `sofia` / `sofia-demo` (or admin `admin` / `demo-admin` for the management console). The seeder also prints an API token you can point an MCP client at.
 
@@ -306,6 +307,14 @@ All endpoints except `/api/health` and `/api/auth/login` require a `Bearer` toke
 |--------|----------|-------------|
 | `POST` | `/api/health/metrics` | Bulk upsert daily health metrics (null fields preserved) |
 | `GET` | `/api/health/metrics` | Query metrics (required: `start_date`, optional: `end_date`) |
+
+### Nutrition
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/nutrition` | Bulk upsert daily dietary totals (null fields preserved) |
+| `GET` | `/api/nutrition` | Query daily rows (required: `start_date`; optional: `end_date`, `limit`) |
+| `GET` | `/api/nutrition/summary` | Intake, body weight and training load per period (optional: `period=week\|month`, `timezone`) |
 
 ## MCP Server (optional)
 

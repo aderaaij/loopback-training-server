@@ -30,3 +30,44 @@
     grid-column: span 1 !important;
   }
 }
+
+/* ── nutrition ── */
+.nut-table {
+  display: flex;
+  flex-direction: column;
+  margin-top: 4px;
+}
+.nut-row {
+  display: grid;
+  grid-template-columns: 74px 60px 62px 128px 56px 108px 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 0;
+  border-top: 1px solid var(--row-line);
+  font-size: 13px;
+}
+.nut-row.nut-head {
+  border-top: none;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.nut-row > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 860px) {
+  .nut-row {
+    grid-template-columns: 68px 52px 56px 1fr;
+  }
+  /* Drop the trailing columns rather than crush them; the charts above carry
+     the same information at narrow widths. */
+  .nut-row > span:nth-child(n + 5) {
+    display: none;
+  }
+}

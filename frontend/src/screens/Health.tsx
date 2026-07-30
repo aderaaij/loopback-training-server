@@ -2,9 +2,10 @@ import { Heartbeat } from '@phosphor-icons/react'
 import { useMemo, useState } from 'react'
 import { usePageHeader } from '../components/PageHeader'
 import { GridLines, areaFromLine, linePath } from '../components/charts'
+import { NutritionSection } from '../components/NutritionCards'
 import { EmptyState, ErrorNote, Loading, SectionLabel } from '../components/ui'
 import { addDays, fmtHoursMinutes, toDateKey } from '../lib/format'
-import { useHealthMetrics } from '../lib/queries'
+import { useHealthMetrics, useNutrition, useNutritionSummary } from '../lib/queries'
 import type { HealthMetricsDay } from '../lib/types'
 import '../styles/workouts.css'
 import '../styles/health.css'
@@ -194,9 +195,12 @@ export function Health() {
   const [range, setRange] = useState<(typeof RANGES)[number]>(RANGES[0])
   const start = toDateKey(addDays(new Date(), -range.days))
   const { data, isLoading, error } = useHealthMetrics(start)
+  const nutrition = useNutrition(start)
+  const nutritionSummary = useNutritionSummary(start, 'week')
 
   // API returns desc by date; charts want chronological order.
   const days = useMemo(() => [...(data ?? [])].reverse(), [data])
+  const nutritionDays = useMemo(() => [...(nutrition.data ?? [])].reverse(), [nutrition.data])
 
   usePageHeader('Health trends', data ? `${data.length} days of metrics in range` : undefined)
 
@@ -231,6 +235,13 @@ export function Health() {
           <WeightChart days={days} />
           <StepsChart days={days} />
         </div>
+      )}
+
+      {nutrition.error && <ErrorNote error={nutrition.error} />}
+      {/* With nothing at all in range the metrics empty state above says it
+          once; no need for a second card saying it again. */}
+      {!nutrition.isLoading && !nutrition.error && (days.length > 0 || nutritionDays.length > 0) && (
+        <NutritionSection days={nutritionDays} periods={nutritionSummary.data?.periods ?? []} />
       )}
     </div>
   )

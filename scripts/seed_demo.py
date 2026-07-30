@@ -3,9 +3,9 @@
 
 Creates athlete "sofia" and fills ~16 weeks of realistic training through the
 public API only (no DB access): runs with splits/heart-rate/cadence/GPS routes,
-Hevy-style strength sessions, daily health metrics, a completed and an active
-training plan, a strength schedule, queued sessions (past ones completed, one
-skipped with feedback), and coaching notes.
+Hevy-style strength sessions, daily health metrics, nutrition logs, a completed
+and an active training plan, a strength schedule, queued sessions (past ones
+completed, one skipped with feedback), and coaching notes.
 
 Stdlib-only. Designed for the disposable demo stack:
 
@@ -340,6 +340,78 @@ def health_days(first: date, today: date, rng: random.Random) -> list[dict]:
     return out
 
 
+# ── nutrition ────────────────────────────────────────────────────────────────
+
+
+def nutrition_days(metrics: list[dict], rng: random.Random) -> list[dict]:
+    """Dietary totals keyed to the same days (and weights) as the metrics above.
+
+    Deliberately imperfect, because real food logging is: about a fifth of days
+    aren't logged at all, one week is missed entirely, and the most recent day
+    is still in progress (`partial`). A demo where every day is logged would
+    hide exactly the coverage signals the dashboard and the coach have to reason
+    about.
+    """
+    out: list[dict] = []
+    last_index = len(metrics) - 1
+    # One entirely unlogged week, ~7 weeks back — a visible gap in adherence.
+    gap = range(max(0, last_index - 55), max(0, last_index - 48))
+
+    for i, m in enumerate(metrics):
+        if i in gap or (i != last_index and rng.random() < 0.18):
+            continue
+
+        d = date.fromisoformat(m["date"])
+        weight = m.get("weight") or 64.0
+        # Intake tracks the training week: bigger on the long run, smaller on
+        # the rest day.
+        kind = RUN_DAYS.get(d.weekday())
+        bump = {"long": 520, "quality": 210, "easy": 60}.get(kind or "", 0)
+        if d.weekday() == 6:  # Sunday: rest
+            bump = -180
+        energy = 2320 + bump + rng.uniform(-190, 190)
+
+        protein = weight * rng.uniform(1.62, 1.98)
+        carb_share = rng.uniform(0.46, 0.56) + (0.04 if kind == "long" else 0)
+        carbs = energy * carb_share / 4
+        fat = max((energy - carbs * 4 - protein * 4) / 9, 35)
+
+        entry = {
+            "date": m["date"],
+            "energy_kcal": round(energy),
+            "carbs_g": round(carbs, 1),
+            "protein_g": round(protein, 1),
+            "fat_g": round(fat, 1),
+            "saturated_fat_g": round(fat * rng.uniform(0.24, 0.36), 1),
+            "fiber_g": round(rng.uniform(22, 38), 1),
+            "sugar_g": round(rng.uniform(42, 95), 1),
+            "sodium_mg": round(rng.uniform(1900, 3400)),
+            "potassium_mg": round(rng.uniform(2300, 3700)),
+            "cholesterol_mg": round(rng.uniform(150, 380)),
+            "water_ml": round(rng.uniform(1900, 3300)),
+            "caffeine_mg": round(rng.uniform(60, 220)),
+            "micros": {
+                "iron_mg": round(rng.uniform(9, 19), 1),
+                "calcium_mg": round(rng.uniform(700, 1400)),
+                "magnesium_mg": round(rng.uniform(240, 460)),
+                "vitamin_c_mg": round(rng.uniform(45, 180)),
+            },
+            "entry_count": rng.randint(3, 7),
+            "sources": ["MyFitnessPal"],
+        }
+        if i == last_index:
+            # Today, mid-afternoon: roughly two thirds logged so far.
+            for key in ("energy_kcal", "carbs_g", "protein_g", "fat_g", "saturated_fat_g",
+                        "fiber_g", "sugar_g", "sodium_mg", "potassium_mg", "cholesterol_mg",
+                        "water_ml", "caffeine_mg"):
+                entry[key] = round(entry[key] * 0.62, 1)
+            entry["micros"] = {k: round(v * 0.62, 1) for k, v in entry["micros"].items()}
+            entry["entry_count"] = 3
+            entry["partial"] = True
+        out.append(entry)
+    return out
+
+
 # ── seeding ──────────────────────────────────────────────────────────────────
 
 
@@ -406,6 +478,10 @@ def main() -> None:
     metrics = health_days(history_start, today, rng)
     api.req("POST", "/api/health/metrics", {"metrics": metrics})
     print(f"health metrics: {len(metrics)} days")
+
+    nutrition = nutrition_days(metrics, rng)
+    api.req("POST", "/api/nutrition", {"days": nutrition})
+    print(f"nutrition: {len(nutrition)} of {len(metrics)} days logged (1 partial, 1 week missed)")
 
     # Fitness improves across the window: pace factor 1.04 → 0.97
     total_days = (today - history_start).days

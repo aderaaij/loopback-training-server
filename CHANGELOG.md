@@ -10,6 +10,46 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [0.1.7] — 2026-07-30
+
+### Added
+
+- **Nutrition.** Daily dietary totals synced from HealthKit — energy, carbs,
+  protein, fat, saturated fat, fiber, sugar, sodium, potassium, cholesterol,
+  water, caffeine, plus an open `micros` map for anything else a food-logging
+  app writes. New `daily_nutrition` table (migration `c3n4u5t6r7i8`),
+  `POST/GET /api/nutrition` with the same "null fields never overwrite"
+  upsert contract as health metrics, and `entry_count`/`sources` recording
+  logging adherence. An absent row means *not tracked*, never *ate nothing*;
+  `partial: true` marks a day synced while still in progress and keeps it out
+  of every average until a later sync completes it.
+- **`GET /api/nutrition/summary`** — intake, body weight and training load
+  aligned on the same weeks or months, with `protein_g_per_kg` and
+  `days_logged`/`days_in_period` coverage on every row. Diet against
+  performance is the question this feature exists for, and answering it
+  previously meant three queries and re-deriving week boundaries by hand.
+  Bucketing is pure and unit-tested (`app/nutrition_summary.py`), done in
+  Python rather than SQL `date_trunc` because nutrition is keyed by local date
+  while workouts carry an instant — pass `timezone` to attribute a
+  late-evening workout to the day the athlete actually ran it.
+- **MCP tools `get_nutrition` and `get_nutrition_summary`**, with server
+  instructions that push the coach toward the summary and spell out how to
+  read the data honestly: check coverage before averaging, treat
+  self-reported intake as trend-not-total, and judge weight against diet over
+  3–4 weeks rather than week to week.
+- **Dashboard: a Nutrition block on the Health screen** — macro composition,
+  energy intake, protein per kg against the 1.6–2.0 g/kg band, and a
+  week-by-week table carrying intake, weight change and training load
+  together. Partial days are dimmed rather than hidden.
+- The demo seeder now seeds nutrition, deliberately imperfect (a fifth of days
+  unlogged, one week missed entirely, today partial) so the demo exercises the
+  coverage signals rather than an unrealistically complete log.
+
+### Notes
+
+- The iOS app does not yet ship nutrition; until it does, the tables and
+  screens stay empty. App-side spec: `docs/app-nutrition-handoff.md`.
+
 ## [0.1.6] — 2026-07-24
 
 ### Fixed

@@ -125,6 +125,7 @@ Models live in `backend/app/models/`. Key tables:
 - **Plan** - training plans with JSONB metadata (goals, guardrails, phases). Metadata may also hold a **`schedule`** — a recurring weekly cadence `{startDate, weeks, days: {mon: {title, routineId}, ...}, time, timezone}`. Used for strength/Hevy cycles: each weekday slot references a **Hevy routine** (opaque `routineId` + title; the LLM looks these up via the separate `hevy-mcp` and passes them in — this API never resolves them). Strength slots are plan markers only; they are **not** pushed to the Apple Watch. Completed strength sessions auto-match to schedule dates via the `traditionalStrength` workouts Hevy syncs in.
 - **PlanNote** - cross-conversation continuity notes (decisions, preferences, life context). LLM reads via `get_plan_context`, writes via `append_plan_note`.
 - **DailyHealthMetrics** - daily HealthKit data (sleep, HR, HRV, weight, VO2Max, etc.)
+- **DailyNutrition** - daily dietary totals from HealthKit (energy, carbs, protein, fat, saturated fat, fiber, sugar, sodium, potassium, cholesterol, water, caffeine + an open `micros` JSONB for the long tail). Kept out of `daily_health_metrics` on purpose: written by food-logging apps rather than the watch, sparse by nature (**an absent row means "not tracked", never "ate nothing"**), and keeping it separate keeps the health-metrics payload lean. `partial: true` marks a day synced while still in progress — excluded from every average until a later sync completes it. `entry_count`/`sources` record logging adherence and which app wrote the day.
 - **WorkoutAction** - edit/delete actions for on-device workouts
 - **WorkoutFeedback** - missed workout feedback
 - **WorkoutInventory** - current on-device workout snapshot
@@ -160,6 +161,13 @@ Models live in `backend/app/models/`. Key tables:
   numbers). "Hard" = interval structure (work + rest/recovery × 2+) or a pace alert
   faster than easy — so C25K walk/run sessions classify hard (harmless: they're
   never scheduled on consecutive days).
+
+### Nutrition
+- `POST /api/nutrition` (bulk upsert, non-null fields only — same contract as health metrics), `GET /api/nutrition` (daily rows, newest first, bounded by `limit`), `GET /api/nutrition/summary?period=week|month&timezone=` — **the analysis endpoint**: per-period intake averages (partial days excluded), `protein_g_per_kg`, body-weight start/end/change, and training load, all aligned on the same buckets so diet-vs-weight-vs-performance needs one call instead of three plus date arithmetic.
+- Period bucketing is pure + unit-tested in `backend/app/nutrition_summary.py`. It buckets in Python rather than SQL `date_trunc` because nutrition is keyed by local date while workouts carry an instant — truncating a timestamptz in the session timezone drifts a late-evening workout into the neighbouring week. Pass `timezone` to attribute workouts to the athlete's local day.
+- `days_logged` / `days_in_period` accompanies every average on purpose: an average over 2 logged days is an anecdote, and the LLM instructions plus the dashboard both say so.
+- Whole-day totals + field-by-field overwrite means **the client must compute them over a complete local day**; a window edge landing mid-day would store that day's tail (the July 2026 sleep/steps corruption, `docs/sleep-data-handoff.md`). App-side spec: `docs/app-nutrition-handoff.md`.
+- MCP: `get_nutrition` (daily rows) and `get_nutrition_summary` (the aligned table — the tool the server instructions push the LLM toward). Dashboard: the Nutrition block on the Health screen (`frontend/src/components/NutritionCards.tsx`).
 
 ### Scheduling / calendar
 - `GET/PUT/DELETE /api/plans/{id}/schedule` — read/set/clear a plan's recurring cadence; the response resolves it to concrete dated `sessions` and flags any that **collide with a queued run** (`warnings`, surfaced not blocked). Weekday keys validated against `mon..sun`.

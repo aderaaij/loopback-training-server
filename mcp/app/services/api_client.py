@@ -425,6 +425,35 @@ class TrainingClient:
             params["end_date"] = end_date
         return await self._request("GET", "/api/health/metrics", params=params)
 
+    async def get_nutrition(
+        self,
+        start_date: str,
+        end_date: str | None = None,
+        limit: int | None = None,
+    ) -> list | dict:
+        """Get daily nutrition totals for a date range."""
+        params: dict[str, Any] = {"start_date": start_date}
+        if end_date:
+            params["end_date"] = end_date
+        if limit is not None:
+            params["limit"] = limit
+        return await self._request("GET", "/api/nutrition", params=params)
+
+    async def get_nutrition_summary(
+        self,
+        start_date: str,
+        end_date: str | None = None,
+        period: str = "week",
+        timezone: str | None = None,
+    ) -> list | dict:
+        """Get nutrition aggregated per period alongside weight and training load."""
+        params: dict[str, Any] = {"start_date": start_date, "period": period}
+        if end_date:
+            params["end_date"] = end_date
+        if timezone:
+            params["timezone"] = timezone
+        return await self._request("GET", "/api/nutrition/summary", params=params)
+
 
 # Singleton instance
 client = TrainingClient()

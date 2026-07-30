@@ -273,6 +273,61 @@ export interface HealthMetricsDay {
   updated_at: string
 }
 
+// ── nutrition (snake_case, like health metrics) ──
+
+export interface NutritionDay {
+  date: string
+  energy_kcal: number | null
+  carbs_g: number | null
+  protein_g: number | null
+  fat_g: number | null
+  saturated_fat_g: number | null
+  fiber_g: number | null
+  sugar_g: number | null
+  sodium_mg: number | null
+  potassium_mg: number | null
+  cholesterol_mg: number | null
+  water_ml: number | null
+  caffeine_mg: number | null
+  micros: Record<string, number> | null
+  entry_count: number | null
+  sources: string[] | null
+  /** Day was still in progress when synced — totals are incomplete. */
+  partial: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface NutritionPeriod {
+  period_start: string
+  period_end: string
+  days_logged: number
+  days_partial: number
+  days_in_period: number
+  /** Per-logged-day averages, keyed by the same names as NutritionDay. */
+  nutrition: Record<string, number | null>
+  protein_g_per_kg: number | null
+  body: {
+    weight_avg: number | null
+    weight_start: number | null
+    weight_end: number | null
+    weight_change: number | null
+  }
+  training: {
+    workouts: number
+    distance_km: number | null
+    duration_min: number | null
+    energy_kcal: number | null
+  }
+}
+
+export interface NutritionSummary {
+  period: string
+  start_date: string
+  end_date: string
+  periods: NutritionPeriod[]
+}
+
 // ── plans (snake_case; metadata JSONB is LLM-authored) ──
 
 export interface PlanPhase {

@@ -11,6 +11,8 @@ import type {
   HealthMetricsDay,
   MeResponse,
   MintedToken,
+  NutritionDay,
+  NutritionSummary,
   Plan,
   PlanCompleteResponse,
   PlanNote,
@@ -363,6 +365,32 @@ export function useHealthMetrics(startDate: string, endDate?: string) {
       api.get<HealthMetricsDay[]>('/api/health/metrics', {
         start_date: startDate,
         end_date: endDate,
+      }),
+  })
+}
+
+// ── nutrition ──
+
+export function useNutrition(startDate: string, endDate?: string) {
+  return useQuery({
+    queryKey: ['nutrition', startDate, endDate],
+    queryFn: () =>
+      api.get<NutritionDay[]>('/api/nutrition', {
+        start_date: startDate,
+        end_date: endDate,
+      }),
+  })
+}
+
+export function useNutritionSummary(startDate: string, period: 'week' | 'month' = 'week') {
+  return useQuery({
+    queryKey: ['nutrition-summary', startDate, period],
+    queryFn: () =>
+      api.get<NutritionSummary>('/api/nutrition/summary', {
+        start_date: startDate,
+        period,
+        // Attribute workouts to the athlete's local day, not UTC.
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       }),
   })
 }

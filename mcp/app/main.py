@@ -11,6 +11,7 @@ from app.tools.actions import actions_router
 from app.tools.coaching import coaching_router
 from app.tools.feedback import feedback_router
 from app.tools.health_metrics import health_metrics_router
+from app.tools.nutrition import nutrition_router
 from app.tools.plan_notes import plan_notes_router
 from app.tools.plans import plans_router
 from app.tools.queue import queue_router
@@ -161,6 +162,35 @@ mcp = FastMCP(
     - Declining resting HR trend → improving cardiovascular fitness
     - Weight/body composition trends alongside training volume
 
+    Nutrition tools (daily dietary totals from HealthKit — written by whatever
+    food-logging app the athlete uses):
+    - get_nutrition_summary: PREFER THIS for any diet question. Intake averages,
+      body weight and training load aligned on the same weeks/months, plus
+      protein g/kg. One call answers "is my fuelling matching my training?"
+    - get_nutrition: day-by-day rows, for a specific day or a short window
+      (e.g. "what did I eat before Sunday's long run?")
+
+    Reading nutrition honestly — these caveats matter more than the numbers:
+    - Coverage first: a day with no logged food has NO row, and `days_logged`
+      per period tells you how much of an average is real. Never present an
+      average over 2 logged days as "your weekly intake", and never read a
+      missing day as a fast.
+    - `partial: true` marks a day synced while still in progress. Already
+      excluded from summary averages; exclude it from any you compute yourself.
+    - Self-report skews low (typically 10-30% under). Trends, macro splits and
+      protein g/kg are trustworthy; absolute calorie totals much less so. Do
+      not compute an energy balance and present it as fact.
+    - Weight moves with glycogen, sodium and hydration day to day. Judge diet
+      against weight over 3-4 weeks, not week to week.
+    - Endurance-relevant anchors: carbohydrate availability around hard/long
+      sessions, protein ~1.6-2.0 g/kg for an athlete in training, and fiber
+      timing before key sessions. Under-fuelling shows up as suppressed HRV,
+      elevated resting HR and stalled paces — cross-check with
+      get_health_metrics before attributing anything to diet alone.
+    - You are not a dietitian. Flag patterns worth a professional's attention
+      (persistent large deficits, very low intake, athlete asking about
+      restriction) rather than prescribing an intake plan.
+
     Common activity types: running, cycling, swimming, walking, hiking
     Distance is in meters, duration in seconds, energy in kcal.
     Speed alerts use metersPerSecond (e.g., 4:00/km pace ≈ 4.17 m/s, 5:00/km ≈ 3.33 m/s).
@@ -173,6 +203,7 @@ mcp.mount(queue_router)
 mcp.mount(actions_router)
 mcp.mount(feedback_router)
 mcp.mount(health_metrics_router)
+mcp.mount(nutrition_router)
 mcp.mount(plans_router)
 mcp.mount(plan_notes_router)
 
