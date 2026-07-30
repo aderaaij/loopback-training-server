@@ -10,6 +10,37 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [0.1.9] — 2026-07-30
+
+### Added
+
+- **`clear` on the nutrition upsert, and `DELETE /api/nutrition/{date}`.**
+  Omitted fields never overwrite — the rule that lets an older client ship
+  fewer fields safely — but that left a client unable to retract what it has
+  *stopped* reporting: gating a field app-side froze the stored value instead
+  of removing it. `clear: ["micros", "potassium_mg"]` on a day nulls the named
+  fields explicitly (omission means "no opinion", `clear` means "known
+  absent"); sending a value for a field also named in `clear` is a 422 rather
+  than a silent guess, and non-clearable names are rejected. The DELETE drops
+  a whole day, for rows that should never have been stored — a stray day a
+  backfill swept in. Neither is exposed through the MCP: the coach reads
+  nutrition, it does not edit it.
+
+### Fixed
+
+- **Six more nutrition fields reclassified as lower bounds, not totals.**
+  0.1.8 called out `micros` and `potassium_mg` but listed sodium, fiber, sugar
+  and saturated fat as reliable — inferred from their values merely looking
+  plausible, which proves nothing about completeness. In fact only
+  `energy_kcal`, `carbs_g`, `protein_g` and `fat_g` are daily totals;
+  `sodium_mg`, `fiber_g`, `sugar_g`, `saturated_fat_g`, `cholesterol_mg`,
+  `potassium_mg` and every key in `micros` sum only those logged foods whose
+  database entry carried the field. They ship ungated on purpose — a lower
+  bound is still useful — and nothing in the wire format marks them, so the
+  MCP instructions and tool docs now carry the classification: "at least X" is
+  sound, inferring a deficiency or an excess never is, and trends in a bounded
+  field track logging detail as much as diet.
+
 ## [0.1.8] — 2026-07-30
 
 ### Fixed

@@ -100,6 +100,82 @@ def test_partial_day_is_flagged_then_completed(client_a):
     assert row["energy_kcal"] == 2400
 
 
+def test_clear_retracts_a_stored_field(client_a):
+    """The mirror of the rule above: omission means "no opinion", so a client
+    that stops reporting a field needs `clear` to retract it. Without this,
+    a value the client no longer stands behind lives forever."""
+    client_a.post(
+        BASE,
+        json={"days": [day_payload("2026-07-02", energy_kcal=2000, potassium_mg=206,
+                                   micros={"iron_mg": 1.6, "calcium_mg": 38})]},
+    )
+    # A later sync that simply omits them must NOT clear them...
+    client_a.post(BASE, json={"days": [day_payload("2026-07-02", energy_kcal=2100)]})
+    row = client_a.get(f"{BASE}?start_date=2026-07-02").json()[0]
+    assert row["micros"] == {"iron_mg": 1.6, "calcium_mg": 38}
+    assert row["potassium_mg"] == 206
+
+    # ...but naming them in `clear` must.
+    resp = client_a.post(
+        BASE, json={"days": [{"date": "2026-07-02", "clear": ["micros", "potassium_mg"]}]}
+    )
+    assert resp.status_code == 200
+    row = client_a.get(f"{BASE}?start_date=2026-07-02").json()[0]
+    assert row["micros"] is None
+    assert row["potassium_mg"] is None
+    assert row["energy_kcal"] == 2100  # untouched
+
+
+def test_clear_on_a_new_day_is_harmless(client_a):
+    client_a.post(BASE, json={"days": [{"date": "2026-07-09", "energy_kcal": 1800, "clear": ["micros"]}]})
+    row = client_a.get(f"{BASE}?start_date=2026-07-09").json()[0]
+    assert row["energy_kcal"] == 1800
+    assert row["micros"] is None
+
+
+def test_clear_rejects_unknown_and_non_clearable_fields(client_a):
+    for field in ("nonsense", "partial", "date"):
+        resp = client_a.post(BASE, json={"days": [{"date": "2026-07-02", "clear": [field]}]})
+        assert resp.status_code == 422, field
+
+
+def test_clear_conflicting_with_a_value_is_rejected(client_a):
+    """Guessing which one wins would silently drop data."""
+    resp = client_a.post(
+        BASE, json={"days": [{"date": "2026-07-02", "potassium_mg": 200, "clear": ["potassium_mg"]}]}
+    )
+    assert resp.status_code == 422
+
+
+def test_delete_removes_a_day(client_a):
+    client_a.post(
+        BASE,
+        json={"days": [day_payload("2026-07-10", energy_kcal=2000),
+                       day_payload("2026-07-11", energy_kcal=2100)]},
+    )
+    resp = client_a.delete(f"{BASE}/2026-07-10")
+    assert resp.status_code == 200
+    assert resp.json() == {"date": "2026-07-10", "deleted": 1}
+    assert [r["date"] for r in client_a.get(f"{BASE}?start_date=2026-07-01").json()] == ["2026-07-11"]
+
+
+def test_delete_missing_day_404s(client_a):
+    assert client_a.delete(f"{BASE}/2026-07-10").status_code == 404
+
+
+def test_delete_cannot_reach_another_users_day(client_a, client_b):
+    client_a.post(BASE, json={"days": [day_payload("2026-07-12", energy_kcal=2000)]})
+    assert client_b.delete(f"{BASE}/2026-07-12").status_code == 404
+    assert len(client_a.get(f"{BASE}?start_date=2026-07-12").json()) == 1
+
+
+def test_summary_path_not_shadowed_by_the_delete_route(client_a):
+    """`/summary` and `/{day}` share a prefix — the date-typed path must not
+    swallow the summary route (different methods, but worth pinning)."""
+    assert client_a.get(f"{BASE}/summary?start_date=2026-07-01").status_code == 200
+    assert client_a.delete(f"{BASE}/summary").status_code == 422  # not a date
+
+
 def test_camel_case_aliases_accepted(client_a):
     """The wire accepts both casings, as health metrics does."""
     resp = client_a.post(

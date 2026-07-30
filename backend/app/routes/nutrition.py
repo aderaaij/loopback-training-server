@@ -13,6 +13,7 @@ from app.nutrition_summary import NutritionDay, WeightPoint, WorkoutLoad, summar
 from app.schemas.nutrition import (
     NutritionBulkCreate,
     NutritionBulkResponse,
+    NutritionDeleteResponse,
     NutritionPeriod,
     NutritionRead,
     NutritionSummary,
@@ -30,6 +31,12 @@ def bulk_upsert_nutrition(payload: NutritionBulkCreate, db: DbSession, user: Cur
     stored values, so an app build that only knows about energy and macros can
     ship alongside one that also reports micronutrients.
 
+    That rule leaves a client unable to retract what it has stopped reporting,
+    so `clear` names fields to null explicitly — omission is "no opinion",
+    `clear` is "known absent". Without it a value the client no longer stands
+    behind (a micronutrient it has since learned is a sparse sum) would
+    outlive that decision forever.
+
     Values are whole-day totals and this overwrites field-by-field, so the
     client must compute them over a *complete* local day. A window whose edge
     lands mid-day would store that day's tail — the mechanism behind the July
@@ -46,6 +53,10 @@ def bulk_upsert_nutrition(payload: NutritionBulkCreate, db: DbSession, user: Cur
             if val is not None:
                 values[col] = val
                 set_on_conflict[col] = val
+
+        for col in day.clear or ():
+            values[col] = None
+            set_on_conflict[col] = None
 
         stmt = insert(DailyNutrition).values(**values)
         if set_on_conflict:
@@ -86,6 +97,28 @@ def list_nutrition(
         q = q.limit(limit)
 
     return db.scalars(q).all()
+
+
+@router.delete("/{day}", response_model=NutritionDeleteResponse)
+def delete_nutrition_day(day: date, db: DbSession, user: CurrentUser):
+    """Remove a whole day's row.
+
+    For data that should never have been stored at all — a stray day a backfill
+    swept in, or a row from a source since found untrustworthy. To retract
+    individual fields while keeping the day, use `clear` on the upsert instead.
+    """
+    row = db.scalar(
+        select(DailyNutrition).where(
+            DailyNutrition.user_id == user.id, DailyNutrition.date == day
+        )
+    )
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"No nutrition row for {day}"
+        )
+    db.delete(row)
+    db.commit()
+    return NutritionDeleteResponse(date=day, deleted=1)
 
 
 @router.get("/summary", response_model=NutritionSummary)

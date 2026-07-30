@@ -31,7 +31,7 @@ Built with FastAPI, PostgreSQL, SQLAlchemy, and React. Includes an optional MCP 
 - **Scheduling & calendar** — Attach a recurring weekly cadence to a plan and query a unified calendar that merges queued runs with scheduled strength sessions, flagging conflicts
 - **Plan validation** — A deterministic "linter" for upcoming schedules: weekly-ramp and taper checks, missing down weeks, back-to-back hard days, guardrail breaches, strength-day collisions — warnings, never blocks (`POST /api/plans/{id}/validate`, also returned when queueing)
 - **Health metrics** — Bulk upsert daily HealthKit metrics (sleep, HR, HRV, weight, VO2Max, steps, body composition) with date-based upsert
-- **Nutrition** — Daily dietary totals from HealthKit (energy, macros, fiber, sodium, water, caffeine + open-ended micronutrients), and a summary endpoint that aligns intake with body weight and training load per week or month, including protein g/kg — so diet can be read against performance in one query
+- **Nutrition** — Daily dietary totals from HealthKit (energy, macros, fiber, sodium, water, caffeine + open-ended micronutrients), and a summary endpoint that aligns intake with body weight and training load per week or month, including protein g/kg — so diet can be read against performance in one query. Only energy and the macros are true daily totals; the rest are lower bounds, because food databases record them on a fraction of entries — the MCP tells the coach so it can't read a sparse sum as a deficiency
 - **Plan-workout linking** — Link queued workouts to plans (`plan_id`) and recorded workouts to their planned counterpart (`plan_workout_id`) for planned-vs-actual analysis
 - **Multi-user** — Username/password accounts with per-device API tokens (`POST /api/auth/login`); all data is scoped per user
 - **Web dashboard** — Authenticated React SPA served same-origin by the API: overview, calendar, workouts, plans, health charts, and queue for athletes; user management and system monitoring for admins
@@ -315,6 +315,7 @@ All endpoints except `/api/health` and `/api/auth/login` require a `Bearer` toke
 | `POST` | `/api/nutrition` | Bulk upsert daily dietary totals (null fields preserved) |
 | `GET` | `/api/nutrition` | Query daily rows (required: `start_date`; optional: `end_date`, `limit`) |
 | `GET` | `/api/nutrition/summary` | Intake, body weight and training load per period (optional: `period=week\|month`, `timezone`) |
+| `DELETE` | `/api/nutrition/{date}` | Remove a whole day's row |
 
 ## MCP Server (optional)
 

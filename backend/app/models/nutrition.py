@@ -29,6 +29,15 @@ NUTRIENT_COLUMNS: tuple[str, ...] = (
 # Everything an upsert may carry beyond the identity (user_id, date).
 UPSERT_COLUMNS: tuple[str, ...] = NUTRIENT_COLUMNS + ("micros", "entry_count", "sources", "partial")
 
+# Fields an upsert may explicitly null via `clear`. Because omitted fields never
+# overwrite — the rule that lets an older client ship fewer fields safely — a
+# client that STOPS reporting something has no other way to retract it, and a
+# stale value would otherwise outlive the decision to stop sending it.
+# `partial` is absent deliberately: it is NOT NULL and has a real default.
+CLEARABLE_COLUMNS: frozenset[str] = frozenset(
+    NUTRIENT_COLUMNS + ("micros", "entry_count", "sources")
+)
+
 
 class DailyNutrition(Base):
     """Daily dietary totals synced from HealthKit.

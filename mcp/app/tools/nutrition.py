@@ -30,12 +30,14 @@ async def get_nutrition(
     nothing". A row with `partial: true` was synced while the day was still in
     progress, so its totals are incomplete; exclude those from any average.
 
-    Energy, carbs, protein, fat, saturated fat, fiber, sugar and sodium are
-    reliable. `micros` and `potassium_mg` are NOT: food databases carry
-    micronutrients on only a fraction of entries, so those fields sum a sparse
-    subset of the day and read far below true intake (observed: ~200 mg
-    potassium on a 2,600 kcal day). Never present them as intake or infer a
-    deficiency from them. Null `water_ml`/`caffeine_mg` means unreported.
+    ONLY `energy_kcal`, `carbs_g`, `protein_g` and `fat_g` are daily totals.
+    `sodium_mg`, `fiber_g`, `sugar_g`, `saturated_fat_g`, `cholesterol_mg`,
+    `potassium_mg` and every key in `micros` are LOWER BOUNDS — food databases
+    record them on only a fraction of entries, so the day sums whichever foods
+    happened to carry the field. Nothing in the payload marks them, and a
+    plausible-looking value is not evidence of completeness. Never infer a
+    deficiency or an excess from one (observed: ~200 mg potassium on a
+    2,600 kcal day). Null `water_ml`/`caffeine_mg` means unreported, not zero.
 
     For trends over more than a couple of weeks, prefer get_nutrition_summary —
     it aggregates per week or month and aligns intake with weight and training
@@ -76,10 +78,12 @@ async def get_nutrition_summary(
       - `body`: weight start/end/avg and the change across the period
       - `training`: workouts, distance, duration and energy burned
 
-    Averages cover energy, macros, fiber, sugar, sodium, cholesterol and
-    potassium — but `potassium_mg` (like the per-day `micros` in get_nutrition)
-    is a sparse sum, not intake: food databases record micronutrients on only
-    some entries. Never read it as a deficiency. The rest is reliable.
+    Averages cover energy, macros and the rest of the nutrient columns — but
+    only `energy_kcal`, `carbs_g`, `protein_g` and `fat_g` are true totals.
+    The averages of `sodium_mg`, `fiber_g`, `sugar_g`, `saturated_fat_g`,
+    `cholesterol_mg` and `potassium_mg` are averages OF LOWER BOUNDS, because
+    food databases record those on only some entries. Never read one as a
+    deficiency or an excess; their trends track logging detail as much as diet.
 
     Read `days_logged` before drawing any conclusion, and remember intake is
     self-reported: food logging typically under-reports, so treat the *trend*

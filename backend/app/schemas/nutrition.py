@@ -1,12 +1,18 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.models.nutrition import CLEARABLE_COLUMNS
 
 
 class NutritionCreate(BaseModel):
     """One day of dietary totals. Every nutrient is optional — a food logger
     that only records energy and macros simply omits the rest, and omitted
-    fields never overwrite what is already stored."""
+    fields never overwrite what is already stored.
+
+    To retract something already stored, name it in `clear`: omission means
+    "no opinion", `clear` means "known absent". A client that stops reporting
+    a field has no other way to say so."""
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -27,6 +33,25 @@ class NutritionCreate(BaseModel):
     entry_count: int | None = Field(default=None, alias="entryCount")
     sources: list[str] | None = None
     partial: bool | None = None
+    clear: list[str] | None = None
+
+    @model_validator(mode="after")
+    def _validate_clear(self):
+        if not self.clear:
+            return self
+        unknown = sorted(set(self.clear) - CLEARABLE_COLUMNS)
+        if unknown:
+            raise ValueError(
+                f"clear names unknown or non-clearable field(s): {', '.join(unknown)}"
+            )
+        # Naming a field in `clear` while also sending a value for it is a
+        # client bug, and guessing which one wins would silently drop data.
+        conflicting = sorted(f for f in self.clear if getattr(self, f, None) is not None)
+        if conflicting:
+            raise ValueError(
+                f"field(s) both provided and cleared: {', '.join(conflicting)}"
+            )
+        return self
 
 
 class NutritionBulkCreate(BaseModel):
@@ -37,6 +62,11 @@ class NutritionBulkCreate(BaseModel):
 
 class NutritionBulkResponse(BaseModel):
     upserted: int
+
+
+class NutritionDeleteResponse(BaseModel):
+    date: date
+    deleted: int
 
 
 class NutritionRead(BaseModel):
