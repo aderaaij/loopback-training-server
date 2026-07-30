@@ -30,6 +30,13 @@ async def get_nutrition(
     nothing". A row with `partial: true` was synced while the day was still in
     progress, so its totals are incomplete; exclude those from any average.
 
+    Energy, carbs, protein, fat, saturated fat, fiber, sugar and sodium are
+    reliable. `micros` and `potassium_mg` are NOT: food databases carry
+    micronutrients on only a fraction of entries, so those fields sum a sparse
+    subset of the day and read far below true intake (observed: ~200 mg
+    potassium on a 2,600 kcal day). Never present them as intake or infer a
+    deficiency from them. Null `water_ml`/`caffeine_mg` means unreported.
+
     For trends over more than a couple of weeks, prefer get_nutrition_summary —
     it aggregates per week or month and aligns intake with weight and training
     load, at a fraction of the tokens.
@@ -68,6 +75,11 @@ async def get_nutrition_summary(
       - `protein_g_per_kg`: protein against the period's average body weight
       - `body`: weight start/end/avg and the change across the period
       - `training`: workouts, distance, duration and energy burned
+
+    Averages cover energy, macros, fiber, sugar, sodium, cholesterol and
+    potassium — but `potassium_mg` (like the per-day `micros` in get_nutrition)
+    is a sparse sum, not intake: food databases record micronutrients on only
+    some entries. Never read it as a deficiency. The rest is reliable.
 
     Read `days_logged` before drawing any conclusion, and remember intake is
     self-reported: food logging typically under-reports, so treat the *trend*

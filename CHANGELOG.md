@@ -10,6 +10,31 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [0.1.8] — 2026-07-30
+
+### Fixed
+
+- **Micronutrient sums are no longer presented as intake.** Verified against
+  real food-logger data on 2026-07-30: potassium read 23–206 mg and iron
+  0.2–2.8 mg on 1,100–2,600 kcal days — 5–12% of any plausible intake. The
+  cause is upstream of this server and of the syncing app: food databases carry
+  energy and macros on nearly every entry but micronutrients on only a
+  fraction, so a day's `micros` and `potassium_mg` faithfully sum a sparse
+  subset of what was eaten. Macros are sound over the same rows
+  (macro-derived kcal reconciles with reported kcal within ±11%). The MCP
+  server instructions and both nutrition tool docstrings now state which
+  fields are reliable (energy, carbs, protein, fat, saturated fat, fiber,
+  sugar, sodium) and forbid inferring a deficiency from the rest — without
+  this, the first coaching conversation to read those numbers would report a
+  severe deficiency that does not exist. Also documents that null
+  `water_ml`/`caffeine_mg` means unreported, never zero intake.
+
+### Notes
+
+- MCP-side and documentation only. The Docker image is unchanged from 0.1.7
+  apart from the version string; self-hosters running the MCP should pull the
+  repo, others have nothing to gain from upgrading.
+
 ## [0.1.7] — 2026-07-30
 
 ### Added

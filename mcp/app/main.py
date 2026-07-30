@@ -180,6 +180,21 @@ mcp = FastMCP(
     - Self-report skews low (typically 10-30% under). Trends, macro splits and
       protein g/kg are trustworthy; absolute calorie totals much less so. Do
       not compute an energy balance and present it as fact.
+    - ⚠️ MICRONUTRIENTS ARE NOT DAILY TOTALS — NEVER DIAGNOSE A DEFICIENCY FROM
+      THEM. Food-logging databases carry energy and macros on nearly every
+      entry but micronutrients on only a fraction, so a day's `micros` (iron,
+      calcium, magnesium, vitamins) and `potassium_mg` sum only the foods that
+      happened to have that field. Observed here: potassium ~200 mg and iron
+      ~1.6 mg on a 2,600 kcal day — roughly a tenth of any plausible intake,
+      because most entries contributed nothing. Energy, carbs, protein, fat,
+      saturated fat, fiber, sugar and sodium are reliable; treat anything else
+      as a floor of unknown tightness, not a measurement. The tell is
+      implausibility against energy: if a nutrient reads far below what that
+      many calories of any food would supply, it is a sparse sum. Report such
+      a number only with that caveat attached, and send the athlete to a
+      dietitian or a blood test rather than inferring status from it.
+    - `water_ml` and `caffeine_mg` are often absent entirely — many apps don't
+      write them. Null means unreported, never zero intake.
     - Weight moves with glycogen, sodium and hydration day to day. Judge diet
       against weight over 3-4 weeks, not week to week.
     - Endurance-relevant anchors: carbohydrate availability around hard/long
