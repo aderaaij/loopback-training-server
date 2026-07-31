@@ -10,6 +10,38 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [0.1.11] — 2026-07-31
+
+### Fixed
+
+- **`weight_change` is a fitted trend, not last-minus-first.** Weigh-in
+  conditions vary systematically — clothed or not, before or after a meal —
+  so differencing the first and last reading reports the gap between two
+  arbitrary conditions as a trend. On a real six-day series alternating
+  between two conditions ~2.4 kg apart, with the mean flat throughout, that
+  yielded **+2.9 kg**; a least-squares fit across the readings' span gives
+  +1.78. The `body` block now also carries **`weigh_ins`** (how many readings
+  back the numbers — the coverage count every other average in this response
+  already had) and **`weight_sd`** (the scatter the fit sits in).
+
+  `weight_sd` matters more than the improved point estimate, and the fit is
+  deliberately not sold as a fix: where weigh-in conditions correlate with
+  time — as they do here, the heavier readings falling ~1.3 days later on
+  average — the condition is confounded with the trend and no estimator can
+  separate them from the readings alone. Reporting the scatter alongside is
+  what makes a change of the same order as its own noise visible as such.
+  `weight_start`/`weight_end` are unchanged; they remain raw facts.
+
+### Changed
+
+- **Nutrition MCP instructions trimmed in favour of signal.** The energy-balance
+  guidance told the model what to conclude ("prefer `weight_change` when the two
+  disagree"), which on noisy weight data means preferring one artifact over
+  another. It now states only what the payload cannot reveal — that
+  `weight_change` is a fit rather than a difference, that basal is an estimate,
+  and that under-reported intake biases the computed deficit larger — and
+  points at `weigh_ins`/`weight_sd` so the model can judge coverage itself.
+
 ## [0.1.10] — 2026-07-31
 
 ### Added

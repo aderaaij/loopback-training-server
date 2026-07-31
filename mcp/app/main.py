@@ -192,17 +192,17 @@ mcp = FastMCP(
       TDEE and balance are null too and only `active_kcal_avg` is available —
       that is still the "energy earned by moving" figure, just not a balance.
       Say which one you have rather than implying the other.
-    - REPORT BALANCE AS A DIRECTION, NOT A FIGURE. Both sides carry error:
-      intake is self-reported and skews low, and HealthKit's basal is an
-      estimate from body metrics. The errors do not cancel — under-reported
-      intake biases the computed deficit LARGER, so a "500 kcal deficit" is
-      routinely nearer 200. Say "you're eating below your burn, and the trend
-      is X" and give the number with its caveat; never present it as a
-      measured quantity or budget an exact intake target from it.
-    - Scale weight over 3-4 weeks is the arbiter, and it is the one number here
-      that isn't modelled. If the computed balance says deficit but weight is
-      flat over a month, the balance is wrong — not the scale. Prefer
-      `body.weight_change` when the two disagree, and say so.
+    - Both sides carry error, and it does not cancel: intake is self-reported
+      and skews low, which biases the computed deficit LARGER, while basal is
+      HealthKit's estimate rather than a measurement. A balance is a direction
+      with a magnitude attached, not a measured quantity — don't budget an
+      exact intake target off one.
+    - Scale weight is the only number here that isn't modelled, so it is the
+      useful cross-check on a computed balance. Read it from `body`:
+      `weight_change` is a least-squares fit across the readings' span (NOT
+      last-minus-first, which would report the gap between two arbitrary
+      weigh-in conditions as a trend), `weight_sd` is the scatter that fit sits
+      in, and `weigh_ins` is how many readings back both.
     - Today is EXCLUDED from expenditure on purpose: health metrics have no
       partial-day flag, so a day still in progress holds only the hours
       elapsed. Never compute a balance for today, and don't infer a low-burn

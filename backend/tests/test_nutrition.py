@@ -22,6 +22,7 @@ from app.nutrition_summary import (
     WorkoutLoad,
     bucket_end,
     bucket_start,
+    weight_trend,
     summarize,
 )
 
@@ -626,3 +627,77 @@ def test_summary_endpoint_excludes_today_from_expenditure(client_a):
         f"{BASE}/summary?start_date={today.isoformat()}&period=week"
     ).json()
     assert all(p["expenditure"]["days_with_energy"] == 0 for p in body["periods"])
+
+
+# ── weight trend ────────────────────────────────────────────────────────────
+
+
+def _w(day: int, kg: float) -> WeightPoint:
+    return WeightPoint(day=date(2026, 7, day), weight=kg)
+
+
+REAL_SERIES = [(25, 80.9), (27, 83.1), (28, 81.6), (29, 83.8), (30, 81.0), (31, 83.9)]
+
+
+def test_weight_trend_beats_last_minus_first_on_the_real_series():
+    """Six consecutive days alternating between two weigh-in conditions ~2.4 kg
+    apart, with no underlying trend. Last-minus-first calls that +2.9 kg. The
+    fit must land materially closer to flat — it does not reach flat, because
+    the condition is confounded with time here, and that is what `sd` is for."""
+    points = [_w(d, kg) for d, kg in REAL_SERIES]
+    change, sd = weight_trend(points)
+
+    naive = REAL_SERIES[-1][1] - REAL_SERIES[0][1]
+    assert abs(change) < abs(naive) - 1.0, f"no better than differencing: {change} vs {naive}"
+
+    # The honest part: the change has not separated from its own scatter, so a
+    # reader with both numbers can see there is no trend here.
+    assert sd is not None and abs(change) < 2 * sd
+
+
+def test_weight_trend_tracks_a_real_gain_added_to_the_same_noise():
+    """The fit must not be so smooth it flattens genuine change. Measured as a
+    delta against the same series' own baseline, which isolates sensitivity to
+    real movement from the confounding above."""
+    baseline, _ = weight_trend([_w(d, kg) for d, kg in REAL_SERIES])
+    shifted, _ = weight_trend(
+        [_w(d, kg + 2.0 * (d - 25) / 6) for d, kg in REAL_SERIES]
+    )
+    assert 1.7 < shifted - baseline < 2.3, f"real trend lost: {shifted - baseline}"
+
+
+def test_weight_trend_matches_endpoints_for_two_clean_readings():
+    change, sd = weight_trend([_w(1, 80.0), _w(31, 78.0)])
+    assert change == -2.0
+    assert sd is None, "two points always fit perfectly; 0.0 scatter would be a lie"
+
+
+def test_weight_trend_needs_a_span():
+    assert weight_trend([]) == (None, None)
+    assert weight_trend([_w(1, 80.0)]) == (None, None)
+    # Two readings on the same day have no span to fit across.
+    assert weight_trend([_w(1, 80.0), _w(1, 81.0)]) == (None, None)
+
+
+def test_summary_reports_weigh_in_count_and_scatter():
+    rows = summarize(
+        [],
+        [_w(29, 80.9), _w(30, 83.1), _w(31, 81.6)],
+        [],
+        date(2026, 7, 27),
+        date(2026, 7, 31),
+    )
+    body = rows[0]["body"]
+    assert body["weigh_ins"] == 3
+    assert body["weight_sd"] is not None
+    # Raw endpoints stay available; they're facts, just not the trend.
+    assert body["weight_start"] == 80.9
+    assert body["weight_end"] == 81.6
+
+
+def test_summary_body_is_empty_safe():
+    rows = summarize([], [], [], date(2026, 7, 27), date(2026, 7, 31))
+    body = rows[0]["body"]
+    assert body["weigh_ins"] == 0
+    assert body["weight_change"] is None
+    assert body["weight_sd"] is None

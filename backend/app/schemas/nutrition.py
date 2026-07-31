@@ -94,12 +94,22 @@ class NutritionRead(BaseModel):
 
 
 class NutritionPeriodBody(BaseModel):
-    """Body-composition context for the period, from daily_health_metrics."""
+    """Body-composition context for the period, from daily_health_metrics.
 
+    `weight_change` is a least-squares fit across the readings' span, not
+    last-minus-first: weigh-in conditions vary systematically (clothed or not,
+    before or after a meal), so differencing two arbitrary readings reports
+    that difference as a trend. `weight_sd` is the scatter the fit sits in —
+    a change smaller than it has not emerged from the noise. `weigh_ins` is
+    how many readings back all of it.
+    """
+
+    weigh_ins: int = 0
     weight_avg: float | None = None
     weight_start: float | None = None
     weight_end: float | None = None
     weight_change: float | None = None
+    weight_sd: float | None = None
 
 
 class NutritionPeriodTraining(BaseModel):

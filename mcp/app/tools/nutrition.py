@@ -88,11 +88,12 @@ async def get_nutrition_summary(
     expenditure — health metrics have no partial-day flag, so a day in progress
     holds only the hours elapsed.
 
-    Treat balance as a DIRECTION. Intake is self-reported and skews low, which
-    biases the computed deficit larger, and basal is HealthKit's estimate; the
-    errors compound rather than cancel. `body.weight_change` over 3-4 weeks is
-    the only unmodelled number here — when it disagrees with the balance, the
-    balance is what's wrong.
+    Balance is a direction with a magnitude, not a measurement: intake is
+    self-reported and skews low, which biases the computed deficit larger, and
+    basal is HealthKit's estimate — the two errors compound rather than cancel.
+    `body` carries the unmodelled cross-check: `weight_change` (a least-squares
+    fit across the readings' span, not last-minus-first), `weight_sd` (the
+    scatter it sits in) and `weigh_ins` (how many readings back both).
 
     Averages cover energy, macros and the rest of the nutrient columns — but
     only `energy_kcal`, `carbs_g`, `protein_g` and `fat_g` are true totals.

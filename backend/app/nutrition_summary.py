@@ -89,6 +89,62 @@ def _total(values: list[float], scale: float = 1.0, ndigits: int = 2) -> float |
     return round(sum(values) * scale, ndigits) if values else None
 
 
+def weight_trend(points: list["WeightPoint"]) -> tuple[float | None, float | None]:
+    """Change across the readings' span, as a least-squares fit, plus scatter.
+
+    Returns (change_kg, residual_sd_kg).
+
+    Body weight is measured under whatever conditions the athlete happened to
+    weigh in under — clothed or not, before or after a meal — and that variance
+    is systematic and permanent, not a glitch that averages out of a short
+    window. Observed on real data: readings alternating between two
+    conditions ~2.4 kg apart over six consecutive days, no underlying trend.
+
+    Differencing the first and last reading picks two arbitrary conditions and
+    reports their difference as a trend; on that series it yields +2.9 kg while
+    the mean sits flat. A fit uses every reading instead, which on the same
+    data gives +1.78 — better, but deliberately not advertised as a fix.
+
+    It cannot be one. The condition is unobserved and correlated with time here
+    (the heavier readings happen to fall ~1.3 days later on average), so it is
+    confounded with the trend and NO estimator can separate them from these
+    readings alone. Weighing under consistent conditions is what would; this
+    function only avoids making it worse.
+
+    Which is why the residual SD is returned alongside and matters more than
+    the point estimate: it says how much scatter the fit sits in, so a change
+    of the same order as its own noise is visible as such rather than reading
+    as a trend. On that series it is 1.37 against a 1.78 change — comparable,
+    i.e. nothing has separated from the noise. Undefined for fewer than 3
+    readings (two points always fit a line perfectly, and reporting 0.0 scatter
+    would be a lie of precision).
+    """
+    if len(points) < 2:
+        return None, None
+
+    xs = [float(p.day.toordinal()) for p in points]
+    ys = [float(p.weight) for p in points]
+    span = xs[-1] - xs[0]
+    if span == 0:
+        return None, None
+
+    mean_x = sum(xs) / len(xs)
+    mean_y = sum(ys) / len(ys)
+    sxx = sum((x - mean_x) ** 2 for x in xs)
+    if sxx == 0:
+        return None, None
+    slope = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys)) / sxx
+
+    change = round(slope * span, 2)
+    if len(points) < 3:
+        return change, None
+
+    intercept = mean_y - slope * mean_x
+    resid = [y - (slope * x + intercept) for x, y in zip(xs, ys)]
+    sd = (sum(r * r for r in resid) / (len(points) - 2)) ** 0.5
+    return change, round(sd, 2)
+
+
 def summarize(
     nutrition: list[NutritionDay],
     weights: list[WeightPoint],
@@ -164,11 +220,7 @@ def summarize(
         weight_avg = _mean([p.weight for p in points], ndigits=2)
         weight_start = round(points[0].weight, 2) if points else None
         weight_end = round(points[-1].weight, 2) if points else None
-        weight_change = (
-            round(weight_end - weight_start, 2)
-            if weight_start is not None and weight_end is not None and len(points) > 1
-            else None
-        )
+        weight_change, weight_sd = weight_trend(points)
 
         protein = averages.get("protein_g")
         protein_per_kg = (
@@ -202,10 +254,12 @@ def summarize(
                 "nutrition": averages,
                 "protein_g_per_kg": protein_per_kg,
                 "body": {
+                    "weigh_ins": len(points),
                     "weight_avg": weight_avg,
                     "weight_start": weight_start,
                     "weight_end": weight_end,
                     "weight_change": weight_change,
+                    "weight_sd": weight_sd,
                 },
                 "training": {
                     "workouts": len(loads),
