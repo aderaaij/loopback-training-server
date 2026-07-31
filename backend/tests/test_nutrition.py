@@ -16,6 +16,7 @@ import pytest
 
 from app.models.workout import Workout
 from app.nutrition_summary import (
+    EnergyDay,
     NutritionDay,
     WeightPoint,
     WorkoutLoad,
@@ -445,3 +446,183 @@ def test_summarize_averages_each_nutrient_over_its_own_present_days():
     assert rows[0]["nutrition"]["energy_kcal"] == 2100.0
     assert rows[0]["nutrition"]["protein_g"] == 120.0
     assert rows[0]["days_logged"] == 2
+
+
+# ── energy expenditure / balance ────────────────────────────────────────────
+
+
+WEEK = (date(2026, 6, 29), date(2026, 7, 5))
+
+
+def _intake(day: date, kcal: float, partial: bool = False) -> NutritionDay:
+    return NutritionDay(day=day, values={"energy_kcal": kcal}, partial=partial)
+
+
+def test_expenditure_sums_active_and_basal_into_tdee():
+    rows = summarize(
+        [],
+        [],
+        [],
+        *WEEK,
+        energy=[
+            EnergyDay(day=date(2026, 6, 29), active_kcal=1200, basal_kcal=1700),
+            EnergyDay(day=date(2026, 6, 30), active_kcal=1000, basal_kcal=1700),
+        ],
+    )
+    exp = rows[0]["expenditure"]
+    assert exp["active_kcal_avg"] == 1100
+    assert exp["basal_kcal_avg"] == 1700
+    assert exp["tdee_kcal_avg"] == 2800
+    assert exp["days_with_tdee"] == 2
+
+
+def test_tdee_is_null_until_basal_arrives_but_active_still_reports():
+    """The app ships basal after active. Until then the movement figure is
+    still the useful half — it must not be withheld for want of a total."""
+    rows = summarize(
+        [],
+        [],
+        [],
+        *WEEK,
+        energy=[EnergyDay(day=date(2026, 6, 29), active_kcal=1200, basal_kcal=None)],
+    )
+    exp = rows[0]["expenditure"]
+    assert exp["active_kcal_avg"] == 1200
+    assert exp["days_with_energy"] == 1
+    assert exp["basal_kcal_avg"] is None
+    assert exp["tdee_kcal_avg"] is None
+    assert exp["days_with_tdee"] == 0
+    assert exp["balance_kcal_avg"] is None
+
+
+def test_balance_pairs_intake_and_tdee_on_the_same_day():
+    """Averaging intake and TDEE separately then subtracting would compare a
+    1-day mean against a 2-day one. Only days holding both may contribute."""
+    rows = summarize(
+        [_intake(date(2026, 6, 29), 2400)],
+        [],
+        [],
+        *WEEK,
+        energy=[
+            EnergyDay(day=date(2026, 6, 29), active_kcal=1200, basal_kcal=1700),
+            # No intake logged this day: expenditure counts it, balance cannot.
+            EnergyDay(day=date(2026, 6, 30), active_kcal=400, basal_kcal=1700),
+        ],
+    )
+    exp = rows[0]["expenditure"]
+    assert exp["days_with_tdee"] == 2
+    assert exp["days_with_balance"] == 1
+    assert exp["balance_kcal_avg"] == 2400 - 2900
+    # The naive difference-of-averages would have been 2400 - 2500 = -100.
+    assert exp["balance_kcal_avg"] != round(2400 - exp["tdee_kcal_avg"])
+
+
+def test_partial_intake_day_is_excluded_from_balance():
+    """A day synced mid-log holds a fraction of its intake and would read as a
+    huge deficit — the same exclusion the nutrient averages already apply."""
+    rows = summarize(
+        [_intake(date(2026, 6, 29), 600, partial=True)],
+        [],
+        [],
+        *WEEK,
+        energy=[EnergyDay(day=date(2026, 6, 29), active_kcal=1200, basal_kcal=1700)],
+    )
+    exp = rows[0]["expenditure"]
+    assert exp["days_with_tdee"] == 1
+    assert exp["days_with_balance"] == 0
+    assert exp["balance_kcal_avg"] is None
+
+
+def test_complete_through_drops_the_day_still_in_progress():
+    """Health metrics carry no partial flag: today holds only the hours
+    elapsed, so a 300 kcal active day at 09:00 must not enter the average."""
+    rows = summarize(
+        [],
+        [],
+        [],
+        *WEEK,
+        energy=[
+            EnergyDay(day=date(2026, 6, 29), active_kcal=1200, basal_kcal=1700),
+            EnergyDay(day=date(2026, 6, 30), active_kcal=300, basal_kcal=500),
+        ],
+        complete_through=date(2026, 6, 29),
+    )
+    exp = rows[0]["expenditure"]
+    assert exp["days_with_energy"] == 1
+    assert exp["active_kcal_avg"] == 1200
+    assert exp["tdee_kcal_avg"] == 2900
+
+
+def test_expenditure_is_absent_energy_safe():
+    """Every existing caller passes no energy at all; the block must still be
+    present and null rather than missing."""
+    rows = summarize([_intake(date(2026, 6, 29), 2400)], [], [], *WEEK)
+    exp = rows[0]["expenditure"]
+    assert exp["days_with_energy"] == 0
+    assert exp["active_kcal_avg"] is None
+    assert exp["tdee_kcal_avg"] is None
+    assert exp["balance_kcal_avg"] is None
+
+
+def test_active_energy_is_not_double_counted_with_workout_load():
+    """active_kcal already contains the workout's burn. The training block
+    reports the same calories from the other table; TDEE must ignore it."""
+    rows = summarize(
+        [],
+        [],
+        [WorkoutLoad(day=date(2026, 6, 29), energy_kcal=600)],
+        *WEEK,
+        energy=[EnergyDay(day=date(2026, 6, 29), active_kcal=1200, basal_kcal=1700)],
+    )
+    assert rows[0]["training"]["energy_kcal"] == 600
+    assert rows[0]["expenditure"]["tdee_kcal_avg"] == 2900
+
+
+def test_basal_round_trips_through_the_api(client_a):
+    client_a.post(METRICS, json={"metrics": [
+        {"date": "2026-07-01", "active_energy_burned": 1150.5, "basal_energy_burned": 1702.25},
+    ]})
+    rows = client_a.get(f"{METRICS}?start_date=2026-07-01&end_date=2026-07-01").json()
+    assert rows[0]["basal_energy_burned"] == 1702.25
+    assert rows[0]["active_energy_burned"] == 1150.5
+
+
+def test_basal_omitted_does_not_erase_stored_value(client_a):
+    """Same contract as every other metric column: an older app build syncing
+    without basal must not wipe what a newer one wrote."""
+    client_a.post(METRICS, json={"metrics": [
+        {"date": "2026-07-02", "basal_energy_burned": 1700.0},
+    ]})
+    client_a.post(METRICS, json={"metrics": [
+        {"date": "2026-07-02", "steps": 9000},
+    ]})
+    rows = client_a.get(f"{METRICS}?start_date=2026-07-02&end_date=2026-07-02").json()
+    assert rows[0]["basal_energy_burned"] == 1700.0
+    assert rows[0]["steps"] == 9000
+
+
+def test_summary_endpoint_exposes_expenditure(client_a):
+    today = date.today()
+    day = today - timedelta(days=2)
+    client_a.post(METRICS, json={"metrics": [
+        {"date": day.isoformat(), "active_energy_burned": 1200, "basal_energy_burned": 1700},
+    ]})
+    client_a.post(BASE, json={"days": [{"date": day.isoformat(), "energy_kcal": 2400}]})
+    body = client_a.get(
+        f"{BASE}/summary?start_date={day.isoformat()}&period=week"
+    ).json()
+    exp = next(p["expenditure"] for p in body["periods"] if p["expenditure"]["days_with_energy"])
+    assert exp["tdee_kcal_avg"] == 2900
+    assert exp["balance_kcal_avg"] == -500
+
+
+def test_summary_endpoint_excludes_today_from_expenditure(client_a):
+    """Today's row is mid-day by construction; it must not drag the average."""
+    today = date.today()
+    client_a.post(METRICS, json={"metrics": [
+        {"date": today.isoformat(), "active_energy_burned": 90, "basal_energy_burned": 200},
+    ]})
+    body = client_a.get(
+        f"{BASE}/summary?start_date={today.isoformat()}&period=week"
+    ).json()
+    assert all(p["expenditure"]["days_with_energy"] == 0 for p in body["periods"])

@@ -24,6 +24,11 @@ class DailyHealthMetrics(Base):
     vo2_max: Mapped[float | None] = mapped_column(Float, nullable=True)
     steps: Mapped[int | None] = mapped_column(Integer, nullable=True)
     active_energy_burned: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Resting burn, from HealthKit's own estimate. Kept separate from active
+    # rather than pre-summed: only the pair distinguishes "moved more" from
+    # "weighs more", and active alone is still the meaningful number when an
+    # older app build reports no basal.
+    basal_energy_burned: Mapped[float | None] = mapped_column(Float, nullable=True)
     body_fat_percentage: Mapped[float | None] = mapped_column(Float, nullable=True)
     lean_body_mass: Mapped[float | None] = mapped_column(Float, nullable=True)
     respiratory_rate: Mapped[float | None] = mapped_column(Float, nullable=True)

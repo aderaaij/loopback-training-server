@@ -77,6 +77,22 @@ async def get_nutrition_summary(
       - `protein_g_per_kg`: protein against the period's average body weight
       - `body`: weight start/end/avg and the change across the period
       - `training`: workouts, distance, duration and energy burned
+      - `expenditure`: energy OUT — `active_kcal_avg` (movement + exercise),
+        `basal_kcal_avg` (resting), `tdee_kcal_avg` (their sum), and
+        `balance_kcal_avg` (intake minus TDEE), each with its own day count
+
+    Active energy already includes workout burn: TDEE is active + basal, and
+    adding `training.energy_kcal` on top double-counts every session. Basal is
+    null until the athlete's app build syncs it, in which case TDEE and balance
+    are null too and active alone is what you have. Today is excluded from
+    expenditure — health metrics have no partial-day flag, so a day in progress
+    holds only the hours elapsed.
+
+    Treat balance as a DIRECTION. Intake is self-reported and skews low, which
+    biases the computed deficit larger, and basal is HealthKit's estimate; the
+    errors compound rather than cancel. `body.weight_change` over 3-4 weeks is
+    the only unmodelled number here — when it disagrees with the balance, the
+    balance is what's wrong.
 
     Averages cover energy, macros and the rest of the nutrient columns — but
     only `energy_kcal`, `carbs_g`, `protein_g` and `fat_g` are true totals.

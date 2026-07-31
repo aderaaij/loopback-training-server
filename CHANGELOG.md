@@ -10,6 +10,46 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [0.1.10] — 2026-07-31
+
+### Added
+
+- **Energy expenditure, so intake has something to be weighed against.**
+  `daily_health_metrics` already held `active_energy_burned` — movement plus
+  exercise, the "leeway you earned" figure a food logger shows — but total
+  daily expenditure also needs the resting half, so this adds
+  **`basal_energy_burned`** (HealthKit estimates it directly; no BMR formula
+  over a profile). `GET /api/nutrition/summary` gains an **`expenditure`**
+  block per period: average active, basal, TDEE and energy balance, aligned on
+  the same buckets as intake, body weight and training load, so "am I eating
+  for my training?" stays one call. `get_nutrition_summary` and
+  `get_health_metrics` surface it to the coach.
+
+  Three things the shape is deliberate about. **TDEE is active + basal and
+  nothing else** — active already includes workout calories, so adding
+  `training.energy_kcal` on top double-counts every session. **Balance is
+  averaged over days holding both a complete intake and a complete TDEE**,
+  not by differencing the two period averages, which would silently compare a
+  3-day mean against a 7-day one; each average carries its own day count for
+  the same reason `days_logged` accompanies intake. And **today is excluded**:
+  health metrics have no `partial` flag, so a day still in progress stores
+  only the hours elapsed and would read as a genuinely low-burn day.
+
+  Basal is null until a syncing client sends it, in which case TDEE and
+  balance are null too and active reports alone — degraded, not broken.
+
+### Changed
+
+- **The MCP's blanket "do not compute an energy balance" is now a calibrated
+  rule.** That instruction was written when only the intake side existed;
+  with expenditure available the useful answer is a direction, not a refusal.
+  The coach is now told to report balance directionally and never as a
+  measured quantity, because the two error sources compound rather than
+  cancel — self-reported intake skews low, which biases the *computed* deficit
+  larger, so a "500 kcal deficit" is routinely nearer 200 — and that scale
+  weight over 3–4 weeks is the arbiter, being the one number in the block that
+  isn't modelled. When weight and balance disagree, the balance is wrong.
+
 ## [0.1.9] — 2026-07-30
 
 ### Added

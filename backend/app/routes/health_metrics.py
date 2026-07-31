@@ -19,7 +19,7 @@ router = APIRouter()
 # Metric columns that can be upserted (excluding id, date, created_at, updated_at)
 _METRIC_COLUMNS = [
     "sleep_duration", "sleep_stages", "resting_heart_rate", "hrv_sdnn",
-    "weight", "vo2_max", "steps", "active_energy_burned",
+    "weight", "vo2_max", "steps", "active_energy_burned", "basal_energy_burned",
     "body_fat_percentage", "lean_body_mass", "respiratory_rate", "spo2",
 ]
 

@@ -22,6 +22,7 @@ class HealthMetricsCreate(BaseModel):
     vo2_max: float | None = Field(default=None, alias="vo2Max")
     steps: int | None = None
     active_energy_burned: float | None = Field(default=None, alias="activeEnergyBurned")
+    basal_energy_burned: float | None = Field(default=None, alias="basalEnergyBurned")
     body_fat_percentage: float | None = Field(default=None, alias="bodyFatPercentage")
     lean_body_mass: float | None = Field(default=None, alias="leanBodyMass")
     respiratory_rate: float | None = Field(default=None, alias="respiratoryRate")
@@ -46,6 +47,7 @@ class HealthMetricsRead(BaseModel):
     vo2_max: float | None
     steps: int | None
     active_energy_burned: float | None
+    basal_energy_burned: float | None
     body_fat_percentage: float | None
     lean_body_mass: float | None
     respiratory_rate: float | None

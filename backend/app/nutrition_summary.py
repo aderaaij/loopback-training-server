@@ -40,6 +40,26 @@ class WorkoutLoad:
     energy_kcal: float | None = None
 
 
+@dataclass(frozen=True)
+class EnergyDay:
+    """A day's expenditure, from daily_health_metrics.
+
+    `active_kcal` already includes workout burn, so TDEE is active + basal and
+    nothing else — adding WorkoutLoad.energy_kcal on top counts every session
+    twice.
+    """
+
+    day: date
+    active_kcal: float | None = None
+    basal_kcal: float | None = None
+
+    @property
+    def tdee(self) -> float | None:
+        if self.active_kcal is None or self.basal_kcal is None:
+            return None
+        return self.active_kcal + self.basal_kcal
+
+
 def bucket_start(day: date, period: str) -> date:
     """First day of the period containing `day`. Weeks start Monday (ISO)."""
     if period == "week":
@@ -76,6 +96,8 @@ def summarize(
     start_date: date,
     end_date: date,
     period: str = "week",
+    energy: list[EnergyDay] | None = None,
+    complete_through: date | None = None,
 ) -> list[dict]:
     """One row per period between start_date and end_date, newest first.
 
@@ -84,6 +106,18 @@ def summarize(
     averaging it in would understate every mean. `days_logged` /
     `days_in_period` is what tells you how much of the period the average
     actually covers.
+
+    `complete_through` bounds the expenditure side the same way `partial` bounds
+    intake. Health metrics carry no partial flag, so a day still in progress
+    stores the hours elapsed so far and looks like a genuine low day; the caller
+    passes the last date it considers closed (normally the athlete's local
+    yesterday) and later days are excluded from expenditure and balance. They
+    stay in the nutrition averages, which have their own flag.
+
+    Energy balance is averaged over days holding *both* a complete intake and a
+    complete TDEE, not by subtracting one period average from the other: those
+    two averages routinely cover different day sets, and differencing them
+    silently compares a 3-day mean against a 7-day one.
     """
     if start_date > end_date:
         return []
@@ -91,6 +125,12 @@ def summarize(
     by_bucket_nutrition: dict[date, list[NutritionDay]] = {}
     by_bucket_weight: dict[date, list[WeightPoint]] = {}
     by_bucket_load: dict[date, list[WorkoutLoad]] = {}
+    by_bucket_energy: dict[date, list[EnergyDay]] = {}
+
+    energy_cutoff = complete_through if complete_through is not None else end_date
+    for row in energy or []:
+        if start_date <= row.day <= min(end_date, energy_cutoff):
+            by_bucket_energy.setdefault(bucket_start(row.day, period), []).append(row)
 
     for row in nutrition:
         if start_date <= row.day <= end_date:
@@ -136,6 +176,22 @@ def summarize(
         )
 
         loads = by_bucket_load.get(cursor, [])
+
+        energy_days = by_bucket_energy.get(cursor, [])
+        active_vals = [e.active_kcal for e in energy_days if e.active_kcal is not None]
+        basal_vals = [e.basal_kcal for e in energy_days if e.basal_kcal is not None]
+        tdee_by_day = {e.day: e.tdee for e in energy_days if e.tdee is not None}
+        intake_by_day = {
+            d.day: float(d.values["energy_kcal"])
+            for d in logged
+            if d.values.get("energy_kcal") is not None
+        }
+        balances = [
+            intake_by_day[day] - tdee
+            for day, tdee in tdee_by_day.items()
+            if day in intake_by_day
+        ]
+
         out.append(
             {
                 "period_start": window_start,
@@ -162,6 +218,15 @@ def summarize(
                     "energy_kcal": _total(
                         [w.energy_kcal for w in loads if w.energy_kcal is not None], ndigits=0
                     ),
+                },
+                "expenditure": {
+                    "days_with_energy": len(active_vals),
+                    "active_kcal_avg": _mean(active_vals, ndigits=0),
+                    "basal_kcal_avg": _mean(basal_vals, ndigits=0),
+                    "days_with_tdee": len(tdee_by_day),
+                    "tdee_kcal_avg": _mean(list(tdee_by_day.values()), ndigits=0),
+                    "days_with_balance": len(balances),
+                    "balance_kcal_avg": _mean(balances, ndigits=0),
                 },
             }
         )

@@ -9,7 +9,7 @@ from app.database import DbSession
 from app.models.health_metrics import DailyHealthMetrics
 from app.models.nutrition import NUTRIENT_COLUMNS, UPSERT_COLUMNS, DailyNutrition
 from app.models.workout import Workout
-from app.nutrition_summary import NutritionDay, WeightPoint, WorkoutLoad, summarize
+from app.nutrition_summary import EnergyDay, NutritionDay, WeightPoint, WorkoutLoad, summarize
 from app.schemas.nutrition import (
     NutritionBulkCreate,
     NutritionBulkResponse,
@@ -176,6 +176,26 @@ def nutrition_summary(
     ).all()
     weights = [WeightPoint(day=r.date, weight=r.weight) for r in weight_rows]
 
+    energy_rows = db.execute(
+        select(
+            DailyHealthMetrics.date,
+            DailyHealthMetrics.active_energy_burned,
+            DailyHealthMetrics.basal_energy_burned,
+        ).where(
+            DailyHealthMetrics.user_id == user.id,
+            DailyHealthMetrics.date >= start_date,
+            DailyHealthMetrics.date <= end,
+        )
+    ).all()
+    energy = [
+        EnergyDay(day=r.date, active_kcal=r.active_energy_burned, basal_kcal=r.basal_energy_burned)
+        for r in energy_rows
+    ]
+    # Health metrics have no `partial` flag, so a day still in progress stores
+    # only the hours elapsed and would read as a genuinely low-burn day. Trust
+    # expenditure only through the athlete's local yesterday.
+    complete_through = datetime.now(tz).date() - timedelta(days=1)
+
     # Widen the workout window by a day on each side: a local-date attribution
     # can pull a workout in from the neighbouring UTC day. summarize() drops
     # anything that still falls outside the window.
@@ -203,7 +223,16 @@ def nutrition_summary(
         for r in workout_rows
     ]
 
-    periods = summarize(days, weights, loads, start_date, end, period)
+    periods = summarize(
+        days,
+        weights,
+        loads,
+        start_date,
+        end,
+        period,
+        energy=energy,
+        complete_through=complete_through,
+    )
     return NutritionSummary(
         period=period,
         start_date=start_date,

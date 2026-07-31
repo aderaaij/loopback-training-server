@@ -21,7 +21,14 @@ async def get_health_metrics(
     """Get daily health metrics synced from HealthKit.
 
     Returns metrics like sleep, resting heart rate, HRV, weight, VO2Max,
-    steps, active energy, body fat, respiratory rate, and SpO2.
+    steps, active energy, basal energy, body fat, respiratory rate, and SpO2.
+
+    `active_energy_burned` is movement + exercise (it already includes workout
+    calories); `basal_energy_burned` is resting burn, and may be null on older
+    app builds. Their sum is total daily expenditure. For anything comparing
+    expenditure against intake, prefer get_nutrition_summary — it aligns both
+    sides on the same periods and excludes days still in progress, which these
+    raw rows do not.
 
     Args:
         start_date: Start date (YYYY-MM-DD)

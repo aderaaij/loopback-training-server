@@ -111,6 +111,26 @@ class NutritionPeriodTraining(BaseModel):
     energy_kcal: float | None = None
 
 
+class NutritionPeriodExpenditure(BaseModel):
+    """Energy out for the period, from daily_health_metrics.
+
+    Active already includes workout burn, so TDEE is active + basal — the
+    `training.energy_kcal` above is a subset of active, not an addend.
+
+    Each average carries its own day count because the three cover different
+    day sets: basal is null until the app ships it, and a balance needs a day
+    to hold both a complete intake and a complete TDEE.
+    """
+
+    days_with_energy: int = 0
+    active_kcal_avg: float | None = None
+    basal_kcal_avg: float | None = None
+    days_with_tdee: int = 0
+    tdee_kcal_avg: float | None = None
+    days_with_balance: int = 0
+    balance_kcal_avg: float | None = None
+
+
 class NutritionPeriod(BaseModel):
     period_start: date
     period_end: date
@@ -121,6 +141,7 @@ class NutritionPeriod(BaseModel):
     protein_g_per_kg: float | None = None
     body: NutritionPeriodBody
     training: NutritionPeriodTraining
+    expenditure: NutritionPeriodExpenditure
 
 
 class NutritionSummary(BaseModel):
