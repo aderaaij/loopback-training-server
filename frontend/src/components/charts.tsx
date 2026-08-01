@@ -160,6 +160,38 @@ export function GridLines({ w, h, rows = 3 }: { w: number; h: number; rows?: num
   )
 }
 
+/** Monday of the ISO week containing a `YYYY-MM-DD` date, as the same format.
+ *
+ *  Parsed as UTC rather than through the local-time `Date` constructor: a
+ *  date-only string is UTC midnight, so `getDay()` west of Greenwich reports
+ *  the previous day and every week boundary lands one day early. Weeks start
+ *  Monday, matching the backend's bucketing in `nutrition_summary.py`.
+ */
+export function weekStart(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  dt.setUTCDate(dt.getUTCDate() - ((dt.getUTCDay() + 6) % 7))
+  return dt.toISOString().slice(0, 10)
+}
+
+/**
+ * Group day rows into ISO weeks, oldest first, preserving order within a week.
+ *
+ * For the long ranges: 365 daily bars in a 1080-unit viewBox is a ~3px slot,
+ * which is neither readable nor a usable hover target. Callers aggregate each
+ * group's values themselves — what "average" means differs per chart.
+ */
+export function groupByWeek<T>(rows: T[], dateOf: (row: T) => string): { week: string; rows: T[] }[] {
+  const out: { week: string; rows: T[] }[] = []
+  for (const row of rows) {
+    const week = weekStart(dateOf(row))
+    const last = out[out.length - 1]
+    if (last && last.week === week) last.rows.push(row)
+    else out.push({ week, rows: [row] })
+  }
+  return out
+}
+
 /**
  * Seconds from the first sample to the bucket a downsampled index came from.
  *

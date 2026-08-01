@@ -41,10 +41,22 @@ function mean(values: number[]): number | null {
   return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null
 }
 
-function MacroChart({ days }: { days: NutritionDay[] }) {
+/**
+ * How many logged days a nutrition chart draws at a given range.
+ *
+ * Nutrition charts plot *logged* days, which are sparse — an unlogged day has
+ * no row at all — so a 1y range rarely produces 365 bars. The cap is only a
+ * legibility backstop, and unlike the health charts these are not bucketed
+ * into weeks: a weekly mean over 2 logged days is an anecdote wearing the
+ * costume of a summary, and the per-day pairing behind the energy balance
+ * would have to be undone to build it.
+ */
+const nutritionWindow = (rangeDays: number) => Math.min(rangeDays, 90)
+
+function MacroChart({ days, rangeDays }: { days: NutritionDay[]; rangeDays: number }) {
   const withMacros = days
     .filter((d) => MACROS.some((m) => d[m.key] != null))
-    .slice(-21)
+    .slice(-nutritionWindow(rangeDays))
   // Before the early return — the hook count must not depend on the data.
   const hover = useChartHover(withMacros.length)
   const hovered = hover.index != null ? withMacros[hover.index] : null
@@ -188,8 +200,16 @@ function pairEnergy(days: NutritionDay[], metrics: HealthMetricsDay[]): EnergyRo
  * Degrades to a plain intake chart when nothing has a TDEE — which is the
  * state of any install whose app build predates basal-energy sync.
  */
-function EnergyBalanceChart({ days, metrics }: { days: NutritionDay[]; metrics: HealthMetricsDay[] }) {
-  const rows = pairEnergy(days, metrics).slice(-21)
+function EnergyBalanceChart({
+  days,
+  metrics,
+  rangeDays,
+}: {
+  days: NutritionDay[]
+  metrics: HealthMetricsDay[]
+  rangeDays: number
+}) {
+  const rows = pairEnergy(days, metrics).slice(-nutritionWindow(rangeDays))
   // Before the early return — the hook count must not depend on the data.
   const hover = useChartHover(rows.length)
   const hovered = hover.index != null ? rows[hover.index] : null
@@ -315,7 +335,9 @@ function EnergyBalanceChart({ days, metrics }: { days: NutritionDay[]; metrics: 
 }
 
 function ProteinPerKgChart({ periods }: { periods: NutritionPeriod[] }) {
-  const withProtein = periods.filter((p) => p.protein_g_per_kg != null).slice(0, 12).reverse()
+  // Every week in range, not a fixed 12: `periods` is already bounded by the
+  // range toggle, and 52 dots on a line read fine where 52 bars would not.
+  const withProtein = periods.filter((p) => p.protein_g_per_kg != null).slice(0, 52).reverse()
   // Before the early return — the hook count must not depend on the data.
   const hover = useChartHover(withProtein.length, 'point')
   const hovered = hover.index != null ? withProtein[hover.index] : null
@@ -396,14 +418,21 @@ function ProteinPerKgChart({ periods }: { periods: NutritionPeriod[] }) {
 
 /** The numbers behind the charts — and the table view the charts need. */
 function WeeklyTable({ periods }: { periods: NutritionPeriod[] }) {
-  const rows = periods.filter((p) => p.days_logged > 0).slice(0, 8)
+  const withData = periods.filter((p) => p.days_logged > 0)
+  // Capped for length, but the cap is stated rather than silent — a table that
+  // quietly stops at 12 rows reads as "that is all the data there is".
+  const rows = withData.slice(0, 12)
   if (rows.length === 0) return null
 
   return (
     <div className="chart-card" style={{ gridColumn: 'span 2' }}>
       <div className="chart-head">
         <SectionLabel>Week by week</SectionLabel>
-        <span className="mono-meta">intake · burn · body · load</span>
+        <span className="mono-meta">
+          {withData.length > rows.length
+            ? `most recent ${rows.length} of ${withData.length} weeks`
+            : 'intake · burn · body · load'}
+        </span>
       </div>
       <div className="nut-table" role="table" aria-label="Weekly nutrition, energy balance, body weight and training load">
         <div className="nut-row nut-head" role="row">
@@ -489,10 +518,12 @@ export function NutritionSection({
   days,
   periods,
   metrics,
+  rangeDays,
 }: {
   days: NutritionDay[]
   periods: NutritionPeriod[]
   metrics: HealthMetricsDay[]
+  rangeDays: number
 }) {
   const hasAny = days.length > 0
 
@@ -510,8 +541,8 @@ export function NutritionSection({
         </div>
       ) : (
         <div className="health-grid">
-          <EnergyBalanceChart days={days} metrics={metrics} />
-          <MacroChart days={days} />
+          <EnergyBalanceChart days={days} metrics={metrics} rangeDays={rangeDays} />
+          <MacroChart days={days} rangeDays={rangeDays} />
           <ProteinPerKgChart periods={periods} />
           <WeeklyTable periods={periods} />
         </div>

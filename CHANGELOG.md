@@ -10,6 +10,39 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [0.1.13] — 2026-08-01
+
+### Fixed
+
+- **The Health screen's range toggle moved the data but not the numbers.**
+  Every summary stat was computed over a hardcoded tail rather than the
+  selected range — sleep over the last 14 nights, steps over the last 30 days,
+  macros and energy over the last 21 logged days, the protein dots over 12
+  weeks, the table over 8 rows. Switching 30d → 1y refetched a year and then
+  averaged the same trailing window, so only the recovery and weight *line
+  shapes* changed. On this data the steps average read 6,711 at all three
+  settings; it should read 6,711 / 4,208 / 5,397.
+
+  Sleep and steps now cover the whole selected range, and **aggregate into ISO
+  weeks beyond 30 days** — 365 daily bars in a 1080-unit viewBox is a ~3px
+  slot, which is neither readable nor a usable hover target. Their headings
+  say so (`Sleep · weekly`, `Steps · weekly average`) and the tooltip reports
+  how many days back each bar.
+
+  Two averaging traps that the weekly view makes easy to fall into, avoided:
+  the headline is averaged over **days in range, not over the bars**, since a
+  bar is already a mean and a 3-day week would otherwise weigh the same as a
+  7-day one; and a sleep stage is averaged over the nights that **recorded
+  stages**, not all nights, or a night with no breakdown drags every stage
+  down and the stack falls short of its own total.
+
+  Nutrition charts scale their window with the range but are deliberately
+  **not** bucketed into weeks: they plot *logged* days, which are sparse, and
+  a weekly mean over two logged days is an anecdote wearing the costume of a
+  summary. The week-by-week table now states its cap ("most recent 12 of 31
+  weeks") instead of silently stopping, which reads as "that is all the data
+  there is".
+
 ## [0.1.12] — 2026-08-01
 
 ### Added

@@ -7,6 +7,7 @@ import {
   GridLines,
   TipRow,
   areaFromLine,
+  groupByWeek,
   linePath,
   useChartHover,
 } from '../components/charts'
@@ -18,13 +19,22 @@ import type { HealthMetricsDay } from '../lib/types'
 import '../styles/workouts.css'
 import '../styles/health.css'
 
+// `weekly` is what the range toggle actually does to the daily bar charts:
+// beyond ~5 weeks a day-per-bar chart is a 3px slot nobody can read or hover,
+// so those ranges aggregate into ISO weeks. The line charts keep every day —
+// a dense line is still a legible line.
 const RANGES = [
-  { key: '30', label: '30d', days: 30 },
-  { key: '90', label: '90d', days: 90 },
-  { key: '365', label: '1y', days: 365 },
+  { key: '30', label: '30d', days: 30, weekly: false },
+  { key: '90', label: '90d', days: 90, weekly: true },
+  { key: '365', label: '1y', days: 365, weekly: true },
 ] as const
 
+type Range = (typeof RANGES)[number]
+
 const SLEEP_COLORS = { deep: '#3A4A6E', core: '#6E91FF', rem: '#48C7C7' }
+
+const mean = (values: number[]): number | null =>
+  values.length ? values.reduce((a, b) => a + b, 0) / values.length : null
 
 function RecoveryChart({ days }: { days: HealthMetricsDay[] }) {
   const W = 1080
@@ -117,52 +127,84 @@ function nearestWeighIn(days: HealthMetricsDay[], from: number): number | null {
   return null
 }
 
-function SleepChart({ days }: { days: HealthMetricsDay[] }) {
-  const withSleep = days.filter((d) => d.sleep_duration != null || d.sleep_stages != null).slice(-14)
+/** One drawn bar: a night, or a week of nights averaged. */
+type SleepBar = {
+  key: string
+  label: string
+  nights: number
+  duration: number | null
+  deep: number
+  core: number
+  rem: number
+  staged: boolean
+}
+
+function sleepBars(days: HealthMetricsDay[], weekly: boolean): SleepBar[] {
+  const withSleep = days.filter((d) => d.sleep_duration != null || d.sleep_stages != null)
+  const toBar = (rows: HealthMetricsDay[], key: string, label: string): SleepBar => {
+    const staged = rows.filter((d) => d.sleep_stages != null)
+    const stage = (k: 'deep' | 'core' | 'rem') =>
+      // Divided by the number of STAGED nights, not all nights: a night with
+      // no breakdown contributes nothing to a stage, and dividing by it would
+      // drag every stage down and make the stack fall short of the total.
+      mean(staged.map((d) => d.sleep_stages?.[k] ?? 0)) ?? 0
+    return {
+      key,
+      label,
+      nights: rows.length,
+      duration: mean(rows.filter((d) => d.sleep_duration != null).map((d) => d.sleep_duration!)),
+      deep: stage('deep'),
+      core: stage('core'),
+      rem: stage('rem'),
+      staged: staged.length > 0,
+    }
+  }
+  if (!weekly) return withSleep.map((d) => toBar([d], d.date, fmtDay(d.date)))
+  return groupByWeek(withSleep, (d) => d.date).map((g) =>
+    toBar(g.rows, g.week, `week of ${fmtDay(g.week)}`),
+  )
+}
+
+function SleepChart({ days, range }: { days: HealthMetricsDay[]; range: Range }) {
+  const bars = sleepBars(days, range.weekly)
   // Before the early return — the hook count must not depend on the data.
-  const hover = useChartHover(withSleep.length)
-  const hovered = hover.index != null ? withSleep[hover.index] : null
-  if (withSleep.length === 0) return null
+  const hover = useChartHover(bars.length)
+  const hovered = hover.index != null ? bars[hover.index] : null
+  if (bars.length === 0) return null
   const W = 480
   const H = 150
-  const bw = W / Math.max(withSleep.length, 1)
-  const maxSecs = Math.max(
-    ...withSleep.map((d) => {
-      const st = d.sleep_stages
-      const stagesTotal = (st?.deep ?? 0) + (st?.core ?? 0) + (st?.rem ?? 0)
-      return Math.max(d.sleep_duration ?? 0, stagesTotal)
-    }),
-  )
-  const avg =
-    withSleep.reduce((a, d) => a + (d.sleep_duration ?? 0), 0) /
-    Math.max(1, withSleep.filter((d) => d.sleep_duration != null).length)
+  const bw = W / Math.max(bars.length, 1)
+  const maxSecs = Math.max(...bars.map((b) => Math.max(b.duration ?? 0, b.deep + b.core + b.rem)), 1)
+  // Over the whole selected range, not the drawn window — they are the same
+  // set now, which is the point: the toggle used to move the data and leave
+  // this number pinned to the last 14 nights.
+  const avg = mean(days.filter((d) => d.sleep_duration != null).map((d) => d.sleep_duration!))
 
   return (
     <div className="chart-card" style={{ background: 'var(--card)' }}>
       <div className="chart-head">
-        <SectionLabel>Sleep</SectionLabel>
-        <span className="mono-meta">{fmtHoursMinutes(avg)} avg</span>
+        <SectionLabel>Sleep{range.weekly && ' · weekly'}</SectionLabel>
+        <span className="mono-meta">{avg != null ? `${fmtHoursMinutes(avg)} avg` : '—'}</span>
       </div>
       <div className="chart-hover" {...hover.bind}>
         <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-          {withSleep.map((d, i) => {
-            const st = d.sleep_stages
+          {bars.map((b, i) => {
             const scale = (v: number) => (v / maxSecs) * (H - 10)
-            const deep = scale(st?.deep ?? 0)
-            const core = scale(st?.core ?? 0)
-            const rem = scale(st?.rem ?? 0)
+            const deep = scale(b.deep)
+            const core = scale(b.core)
+            const rem = scale(b.rem)
             const total = deep + core + rem
             const x = i * bw + bw * 0.16
             const width = bw * 0.68
             const op = hover.index != null && hover.index !== i ? 0.4 : 1
-            if (total === 0 && d.sleep_duration != null) {
+            if (total === 0 && b.duration != null) {
               // no stage breakdown — single block
-              const h = scale(d.sleep_duration)
-              return <rect key={d.date} x={x} y={H - h} width={width} height={h} rx={2} fill={SLEEP_COLORS.core} opacity={0.65 * op} />
+              const h = scale(b.duration)
+              return <rect key={b.key} x={x} y={H - h} width={width} height={h} rx={2} fill={SLEEP_COLORS.core} opacity={0.65 * op} />
             }
             const top = H - total
             return (
-              <g key={d.date} opacity={op}>
+              <g key={b.key} opacity={op}>
                 <rect x={x} y={top} width={width} height={deep} rx={2} fill={SLEEP_COLORS.deep} />
                 <rect x={x} y={top + deep} width={width} height={core} fill={SLEEP_COLORS.core} />
                 <rect x={x} y={top + deep + core} width={width} height={rem} rx={2} fill={SLEEP_COLORS.rem} />
@@ -170,20 +212,25 @@ function SleepChart({ days }: { days: HealthMetricsDay[] }) {
             )
           })}
         </svg>
-        <ChartTooltip index={hover.index} count={withSleep.length}>
+        <ChartTooltip index={hover.index} count={bars.length}>
           {hovered && (
             <>
-              <span className="tip-date">{fmtDay(hovered.date)}</span>
-              <TipRow label="Asleep"
-                value={hovered.sleep_duration != null ? fmtHoursMinutes(hovered.sleep_duration) : '—'} />
-              {hovered.sleep_stages ? (
+              <span className="tip-date">{hovered.label}</span>
+              <TipRow label={range.weekly ? 'Asleep · avg' : 'Asleep'}
+                value={hovered.duration != null ? fmtHoursMinutes(hovered.duration) : '—'} />
+              {hovered.staged ? (
                 <>
-                  <TipRow color={SLEEP_COLORS.deep} label="Deep" value={fmtHoursMinutes(hovered.sleep_stages.deep ?? 0)} />
-                  <TipRow color={SLEEP_COLORS.core} label="Core" value={fmtHoursMinutes(hovered.sleep_stages.core ?? 0)} />
-                  <TipRow color={SLEEP_COLORS.rem} label="REM" value={fmtHoursMinutes(hovered.sleep_stages.rem ?? 0)} />
+                  <TipRow color={SLEEP_COLORS.deep} label="Deep" value={fmtHoursMinutes(hovered.deep)} />
+                  <TipRow color={SLEEP_COLORS.core} label="Core" value={fmtHoursMinutes(hovered.core)} />
+                  <TipRow color={SLEEP_COLORS.rem} label="REM" value={fmtHoursMinutes(hovered.rem)} />
                 </>
               ) : (
-                <span className="tip-note">No stage breakdown for this night.</span>
+                <span className="tip-note">No stage breakdown recorded.</span>
+              )}
+              {range.weekly && (
+                <span className="tip-note">
+                  {hovered.nights} {hovered.nights === 1 ? 'night' : 'nights'} recorded
+                </span>
               )}
             </>
           )}
@@ -262,53 +309,78 @@ function WeightChart({ days }: { days: HealthMetricsDay[] }) {
   )
 }
 
-function StepsChart({ days }: { days: HealthMetricsDay[] }) {
-  const withSteps = days.filter((d) => d.steps != null).slice(-30)
+type StepBar = { key: string; label: string; days: number; steps: number; active: number | null }
+
+function stepBars(days: HealthMetricsDay[], weekly: boolean): StepBar[] {
+  const withSteps = days.filter((d) => d.steps != null)
+  const toBar = (rows: HealthMetricsDay[], key: string, label: string): StepBar => ({
+    key,
+    label,
+    days: rows.length,
+    steps: mean(rows.map((d) => d.steps!)) ?? 0,
+    active: mean(
+      rows.filter((d) => d.active_energy_burned != null).map((d) => d.active_energy_burned!),
+    ),
+  })
+  if (!weekly) return withSteps.map((d) => toBar([d], d.date, fmtDay(d.date)))
+  return groupByWeek(withSteps, (d) => d.date).map((g) =>
+    toBar(g.rows, g.week, `week of ${fmtDay(g.week)}`),
+  )
+}
+
+function StepsChart({ days, range }: { days: HealthMetricsDay[]; range: Range }) {
+  const bars = stepBars(days, range.weekly)
   // Before the early return — the hook count must not depend on the data.
-  const hover = useChartHover(withSteps.length)
-  const hovered = hover.index != null ? withSteps[hover.index] : null
-  if (withSteps.length === 0) return null
+  const hover = useChartHover(bars.length)
+  const hovered = hover.index != null ? bars[hover.index] : null
+  if (bars.length === 0) return null
   const W = 1080
   const H = 120
-  const bw = W / withSteps.length
-  const max = Math.max(...withSteps.map((d) => d.steps!), 10000)
-  const avg = Math.round(withSteps.reduce((a, d) => a + d.steps!, 0) / withSteps.length)
+  const bw = W / bars.length
+  const max = Math.max(...bars.map((b) => b.steps), 10000)
+  // Over every day in range. A weekly bar is already a mean, so averaging the
+  // bars would weight a 3-day week the same as a 7-day one.
+  const avg = mean(days.filter((d) => d.steps != null).map((d) => d.steps!))
 
   return (
     <div className="chart-card" style={{ gridColumn: 'span 2', background: 'var(--card)' }}>
       <div className="chart-head">
-        <SectionLabel>Daily steps</SectionLabel>
-        <span className="mono-meta">{avg.toLocaleString('en-US')} avg</span>
+        <SectionLabel>{range.weekly ? 'Steps · weekly average' : 'Daily steps'}</SectionLabel>
+        <span className="mono-meta">{avg != null ? `${Math.round(avg).toLocaleString('en-US')} avg` : '—'}</span>
       </div>
       <div className="chart-hover" {...hover.bind}>
         <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-          {withSteps.map((d, i) => {
-            const h = Math.max(2, (d.steps! / max) * (H - 10))
+          {bars.map((b, i) => {
+            const h = Math.max(2, (b.steps / max) * (H - 10))
             return (
               <rect
-                key={d.date}
+                key={b.key}
                 x={i * bw + bw * 0.12}
                 y={H - h}
                 width={bw * 0.76}
                 height={h}
                 rx={3}
                 opacity={hover.index != null && hover.index !== i ? 0.4 : 1}
-                fill={d.steps! > 10000 ? 'var(--green)' : 'color-mix(in srgb, var(--accent) 40%, #3A332A)'}
+                fill={b.steps > 10000 ? 'var(--green)' : 'color-mix(in srgb, var(--accent) 40%, #3A332A)'}
               />
             )
           })}
         </svg>
-        <ChartTooltip index={hover.index} count={withSteps.length}>
+        <ChartTooltip index={hover.index} count={bars.length}>
           {hovered && (
             <>
-              <span className="tip-date">{fmtDay(hovered.date)}</span>
-              <TipRow color={hovered.steps! > 10000 ? 'var(--green)' : 'var(--accent)'} label="Steps"
-                value={hovered.steps!.toLocaleString('en-US')} />
-              {hovered.active_energy_burned != null && (
-                <TipRow label="Active energy" value={`${Math.round(hovered.active_energy_burned)} kcal`} />
+              <span className="tip-date">{hovered.label}</span>
+              <TipRow color={hovered.steps > 10000 ? 'var(--green)' : 'var(--accent)'}
+                label={range.weekly ? 'Steps · avg/day' : 'Steps'}
+                value={Math.round(hovered.steps).toLocaleString('en-US')} />
+              {hovered.active != null && (
+                <TipRow label={range.weekly ? 'Active · avg/day' : 'Active energy'}
+                  value={`${Math.round(hovered.active)} kcal`} />
               )}
-              {hovered.basal_energy_burned != null && (
-                <TipRow label="Resting energy" value={`${Math.round(hovered.basal_energy_burned)} kcal`} />
+              {range.weekly && (
+                <span className="tip-note">
+                  {hovered.days} {hovered.days === 1 ? 'day' : 'days'} recorded
+                </span>
               )}
             </>
           )}
@@ -319,7 +391,7 @@ function StepsChart({ days }: { days: HealthMetricsDay[] }) {
 }
 
 export function Health() {
-  const [range, setRange] = useState<(typeof RANGES)[number]>(RANGES[0])
+  const [range, setRange] = useState<Range>(RANGES[0])
   const start = toDateKey(addDays(new Date(), -range.days))
   const { data, isLoading, error } = useHealthMetrics(start)
   const nutrition = useNutrition(start)
@@ -358,9 +430,9 @@ export function Health() {
       {days.length > 0 && (
         <div className="health-grid">
           <RecoveryChart days={days} />
-          <SleepChart days={days} />
+          <SleepChart days={days} range={range} />
           <WeightChart days={days} />
-          <StepsChart days={days} />
+          <StepsChart days={days} range={range} />
         </div>
       )}
 
@@ -375,6 +447,7 @@ export function Health() {
           // a join of these two series on the day, done here rather than
           // server-side because both are already in hand.
           metrics={days}
+          rangeDays={range.days}
         />
       )}
     </div>
