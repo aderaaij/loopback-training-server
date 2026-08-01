@@ -49,6 +49,7 @@ def test_list_users_shape(client_admin, user_a):
     assert set(alice) == {
         "id", "username", "displayName", "role", "isActive", "tokenCount", "lastSeenAt",
         "lastWorkoutSyncAt", "lastHealthDate",
+        "dataConsent", "dataConsentUpdatedAt", "dataConsentReportedAt",
     }
     assert alice["role"] == "user"
     assert alice["isActive"] is True
@@ -56,6 +57,9 @@ def test_list_users_shape(client_admin, user_a):
     # No seeded workouts/health for the fixture user.
     assert alice["lastWorkoutSyncAt"] is None
     assert alice["lastHealthDate"] is None
+    # Never reported consent — both stamps null, permissive default in force.
+    assert alice["dataConsent"] == ["training", "recovery", "body", "activity", "nutrition"]
+    assert alice["dataConsentReportedAt"] is None
 
 
 # --- create ------------------------------------------------------------------

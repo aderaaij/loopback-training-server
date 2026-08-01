@@ -219,6 +219,18 @@ function syncMeta(u: AdminUserRow): string | null {
   return `sync ${workout} · health ${health}`
 }
 
+/** What the athlete shares with the coach — and whether they've ever said.
+ *
+ * "not reported" is the line that matters: the server defaults to sharing
+ * everything, so an app that has never managed to push its choice looks
+ * identical to one that chose everything. Without this it stays invisible. */
+function consentMeta(u: AdminUserRow): string | null {
+  if (u.role === 'admin') return null // admins have no data to share
+  const shared = u.dataConsent.filter((d) => d !== 'training')
+  const list = shared.length ? shared.join(', ') : 'training only'
+  return u.dataConsentReportedAt ? `shares ${list}` : `shares ${list} · not reported`
+}
+
 export function Users() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
@@ -262,6 +274,7 @@ export function Users() {
             const isSelf = u.id === user?.id
             const expanded = expandedId === u.id
             const sync = syncMeta(u)
+            const consent = consentMeta(u)
             return (
               <div key={u.id}>
               <div className="u-row" style={u.isActive ? undefined : { opacity: 0.55 }}>
@@ -304,6 +317,19 @@ export function Users() {
                   {sync && (
                     <span className="mono-meta" style={{ fontSize: 10, display: 'block', color: 'var(--faint)', marginTop: 2 }}>
                       {sync}
+                    </span>
+                  )}
+                  {consent && (
+                    <span
+                      className="mono-meta"
+                      style={{
+                        fontSize: 10,
+                        display: 'block',
+                        color: u.dataConsentReportedAt ? 'var(--faint)' : 'var(--amber)',
+                        marginTop: 2,
+                      }}
+                    >
+                      {consent}
                     </span>
                   )}
                 </span>

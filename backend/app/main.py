@@ -15,7 +15,7 @@ from app.auth_events import client_ip, record_auth_event
 from app.backup import run_scheduler
 from app.database import SessionLocal
 from app.rate_limit import limiter
-from app.routes import actions, admin, auth, feedback, health, health_metrics, inventory, nutrition, plan_notes, plans, queue, schedule, sleep, workouts
+from app.routes import actions, admin, auth, feedback, health, health_metrics, inventory, me, nutrition, plan_notes, plans, queue, schedule, sleep, workouts
 from app.version import __version__
 
 
@@ -95,6 +95,7 @@ api_router.include_router(feedback.router, prefix="/workouts/feedback", tags=["f
 api_router.include_router(inventory.router, prefix="/workouts/inventory", tags=["inventory"])
 api_router.include_router(workouts.router, prefix="/workouts", tags=["workouts"])
 api_router.include_router(queue.router, prefix="/queue", tags=["queue"])
+api_router.include_router(me.router, prefix="/me", tags=["me"])
 api_router.include_router(health_metrics.router, prefix="/health/metrics", tags=["health-metrics"])
 api_router.include_router(sleep.router, prefix="/health/sleep", tags=["sleep"])
 api_router.include_router(nutrition.router, prefix="/nutrition", tags=["nutrition"])

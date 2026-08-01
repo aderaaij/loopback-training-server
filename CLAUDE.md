@@ -180,6 +180,61 @@ Models live in `backend/app/models/`. Key tables:
 - ⚠️ **`weight_change` is a least-squares fit across the readings' span, NOT last-minus-first** (fixed 0.1.11), and `body` also carries **`weigh_ins`** + **`weight_sd`**. Weigh-in conditions vary systematically — clothed or not, before or after a meal — so differencing two arbitrary readings reports the gap between two *conditions* as a trend: a real six-day series alternating between conditions ~2.4 kg apart, mean flat throughout, gave **+2.9 kg** that way vs **+1.78** fitted. **The fit is not a fix and must not be sold as one** — where conditions correlate with time (here the heavier readings fell ~1.3 days later on average) the condition is confounded with the trend and *no* estimator separates them from the readings alone; weighing under consistent conditions is what would. `weight_sd` (1.37 on that series, i.e. the same order as the change) is what makes "this hasn't separated from noise" visible, and matters more than the point estimate.
 - **Design rule this repo follows for LLM-facing payloads: put it in the data, not the prose.** The 0.1.10 instructions told the model what to *conclude* ("prefer `weight_change` when it disagrees with the balance"), which on noisy weight data means preferring one artifact over another. 0.1.11 trims that: instructions now carry only what the payload cannot reveal — that `weight_change` is a fit rather than a difference, that basal is an estimate, that today is excluded — and the judgement calls are handed to the model as numbers (`weigh_ins`, `weight_sd`, `days_logged`, `days_with_balance`). A capable client works out that a 1.78 kg change on 6 readings with 1.37 scatter means nothing; it *cannot* work out how a field was computed.
 
+### Per-domain data consent (2026-07-31)
+- The athlete chooses in the iOS app which categories of health data the coach may
+  read. Five wire values — `training`, `recovery`, `body`, `activity`, `nutrition`
+  — **shared API surface with `DataDomains.wireValue` in the app; renaming one
+  silently revokes a domain.** Vocabulary, the domain→column map and the request
+  scoping live in `backend/app/data_consent.py`; the app reports the whole set to
+  `PUT /api/me/data-consent` on every launch (`GET` reads it back).
+- **The default is all five, and that is deliberate.** An absent record means "not
+  yet reported", never "restricted" — an install predating consent had no way to
+  limit anything. Because a permissive default hides a broken push, both stamps
+  exist: `data_consent_reported_at` (every report) and `data_consent_updated_at`
+  (only on change). One column cannot answer both "is the app still telling us?"
+  and "when did this change?" — with only the latter, an athlete whose choice
+  equals the default is indistinguishable from one who never reported. The admin
+  Users screen flags "not reported" in amber for the same reason.
+- **Two layers, and only together do they enforce anything.** The MCP drops
+  unshared tools from `tools/list` (`mcp/app/{consent,middleware}.py`) — filtering
+  the *advertised list*, never refusing an advertised call, because a tool that
+  errors makes the coach apologise and tell the athlete to go enable tracking,
+  which is the nagging the app's surfaces exist to avoid. The backend then filters
+  what a shared tool returns: **`recovery`, `body` and `activity` are columns of
+  one `daily_health_metrics` row**, so tool-level filtering alone would disclose
+  all three at once. Unshared columns are **absent, not null** — null already
+  means "not tracked" in this payload.
+- **The trigger is the `X-Consent-Scope` header**, sent by the MCP client on
+  *every* request centrally (`api_client._headers`) so a tool added later is
+  filtered without anyone opting it in. No header = the athlete themself asking
+  (dashboard, iOS app) = never filtered. **This is a disclosure boundary, not
+  access control**: the same token can call the REST API directly and get
+  everything. Enforcing it server-side would need a `coach` scope on tokens.
+- ⚠️ **`GET /api/nutrition/summary` spans four domains despite its name** —
+  `body` is weight, `expenditure` is active/basal energy, `training` is workouts.
+  Gating it on `nutrition` alone discloses the other two, and `protein_g_per_kg`
+  goes with `body` (weight data wearing a nutrition name — derived fields cross
+  domain boundaries).
+- **Server instructions cannot be filtered.** FastMCP fixes them when the
+  connection opens, before middleware runs; `on_initialize` looks like the hook
+  and is not (the inner handler has already responded by the time middleware sees
+  the result). So domain guidance lives on the tool descriptions, which ship only
+  when their tool does. Anything domain-specific added back to
+  `mcp/app/instructions.py` is read by every athlete regardless of what they
+  share — `mcp/tests/test_consent_filter.py` asserts it stays out. Related known
+  wart: those instructions embed `date.today()` evaluated at process start, so a
+  long-lived server keeps telling new clients the date it booted on.
+- ⚠️ **No API path in this app gets FastAPI's automatic trailing-slash redirect** —
+  the SPA catch-all (`main.py`, `@app.get("/{full_path:path}")`) matches first, so
+  `/api/…/thing/` finds a GET-only route and any non-GET method to it returns
+  **405**, which is indistinguishable from "endpoint not implemented". That is the
+  same 405 the iOS app saw while `/api/me/data-consent` genuinely didn't exist, so
+  it would have looked like the deploy had changed nothing. Both spellings of the
+  consent path are registered for that reason; a new client-facing route should do
+  the same, or the client must be sure it never appends a slash.
+- Not built yet: `DELETE /api/me/data/{domain}` (per-domain deletion at the moment
+  consent is withdrawn — the app currently promises only that syncing stops).
+
 ### Scheduling / calendar
 - `GET/PUT/DELETE /api/plans/{id}/schedule` — read/set/clear a plan's recurring cadence; the response resolves it to concrete dated `sessions` and flags any that **collide with a queued run** (`warnings`, surfaced not blocked). Weekday keys validated against `mon..sun`.
 - `GET /api/schedule/calendar?from=&to=` — unified timeline merging scheduled runs (queue) + strength sessions (active plan schedules), each with a `conflict` flag. Shared by the dashboard **Schedule** page and the MCP.

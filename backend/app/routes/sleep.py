@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
 from app.auth import CurrentUser
+from app.data_consent import RECOVERY, CurrentConsent
 from app.database import DbSession
 from app.models.sleep_sample import SleepSample
 from app.schemas.sleep import (
@@ -60,6 +61,7 @@ def upload_samples(payload: SleepSamplesBulkCreate, db: DbSession, user: Current
 def list_samples(
     db: DbSession,
     user: CurrentUser,
+    consent: CurrentConsent,
     start_date: date = Query(...),
     end_date: date | None = None,
 ):
@@ -67,6 +69,9 @@ def list_samples(
 
     Diagnostic view — this is how overlapping/duplicate sources get attributed.
     """
+    # No MCP tool exposes this today; the gate is here so that adding one can't
+    # route around consent by accident.
+    consent.require(RECOVERY)
     win_start = datetime.combine(start_date, time.min, tzinfo=dt_timezone.utc)
     q = select(SleepSample).where(SleepSample.user_id == user.id, SleepSample.end_at > win_start)
     if end_date:

@@ -10,8 +10,15 @@ dependencies = [
     "pydantic-settings>=2.0.0",
 ]
 
+[project.optional-dependencies]
+test = ["pytest>=8", "pytest-asyncio>=1"]
+
 [project.scripts]
 start = "app.main:main"
+
+[tool.pytest.ini_options]
+# The suite drives a real MCP session over FastMCP's in-memory transport.
+asyncio_mode = "auto"
 
 [build-system]
 requires = ["hatchling"]

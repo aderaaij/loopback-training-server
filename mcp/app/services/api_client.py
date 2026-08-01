@@ -40,7 +40,7 @@ class TrainingClient:
         self.timeout = settings.request_timeout
         self._api_key = settings.training_api_key.get_secret_value()
 
-    def _resolve_auth(self) -> str:
+    def resolve_auth(self) -> str:
         """Resolve the Authorization header for this request.
 
         An Authorization header on the incoming MCP request is forwarded as-is,
@@ -67,12 +67,21 @@ class TrainingClient:
             )
         return f"Bearer {self._api_key}"
 
+    def _headers(self) -> dict[str, str]:
+        return {
+            "Authorization": self.resolve_auth(),
+            "Content-Type": "application/json",
+            # Every request this server makes is on the coach's behalf, so the
+            # scope goes on centrally rather than per call site: a tool added
+            # later is consent-filtered without anyone remembering to opt it
+            # in. The backend drops unshared columns and refuses unshared
+            # resources; unscoped callers (dashboard, iOS app) are untouched.
+            "X-Consent-Scope": "coach",
+        }
+
     async def _request(self, method: str, path: str, **kwargs: Any) -> list | dict:
         """Make an HTTP request to the Training API."""
-        headers = {
-            "Authorization": self._resolve_auth(),
-            "Content-Type": "application/json",
-        }
+        headers = self._headers()
         url = f"{self.base_url}{path}"
         logger.debug(f"Making {method} request to {url}")
 
@@ -96,7 +105,7 @@ class TrainingClient:
     async def _delete(self, path: str, noun: str) -> dict:
         """DELETE a resource. Separate from _request because a 204 has no JSON body."""
         url = f"{self.base_url}{path}"
-        headers = {"Authorization": self._resolve_auth()}
+        headers = self._headers()
         async with httpx.AsyncClient(timeout=self.timeout) as http_client:
             response = await http_client.request("DELETE", url, headers=headers)
             if response.status_code == 404:
@@ -453,6 +462,16 @@ class TrainingClient:
         if timezone:
             params["timezone"] = timezone
         return await self._request("GET", "/api/nutrition/summary", params=params)
+
+    async def get_data_consent(self) -> dict:
+        """Which data categories this athlete shares with the coach.
+
+        Read by app/consent.py to decide which tools to advertise. Never
+        exposed as a tool: the coach does not need to discuss the athlete's
+        privacy settings, it just works with the tools it has.
+        """
+        result = await self._request("GET", "/api/me/data-consent")
+        return result if isinstance(result, dict) else {}
 
 
 # Singleton instance

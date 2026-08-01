@@ -21,6 +21,7 @@ from app.auth import CurrentAdmin, get_current_admin
 from app.auth_events import record_auth_event
 from app.backup import BackupError, run_backup
 from app.config import get_settings
+from app.data_consent import DEFAULT_DOMAINS
 from app.database import DbSession
 from app.models.api_token import ApiToken
 from app.models.auth_event import AuthEvent
@@ -53,6 +54,12 @@ class AdminUserOut(_CamelModel):
     # the most recent day with health metrics.
     last_workout_sync_at: datetime | None = None
     last_health_date: date | None = None
+    # Which data categories this user shares with the coach. Both stamps null =
+    # the app has never reported, so the permissive default is in force —
+    # the state worth seeing, since a failed push is otherwise silent.
+    data_consent: list[str] = Field(default_factory=list)
+    data_consent_updated_at: datetime | None = None
+    data_consent_reported_at: datetime | None = None
 
 
 class AdminTokenOut(_CamelModel):
@@ -134,6 +141,9 @@ def _to_out(user: User, token_count: int, last_seen_at: datetime | None) -> Admi
         is_active=user.is_active,
         token_count=token_count,
         last_seen_at=last_seen_at,
+        data_consent=list(user.data_consent or DEFAULT_DOMAINS),
+        data_consent_updated_at=user.data_consent_updated_at,
+        data_consent_reported_at=user.data_consent_reported_at,
     )
 
 

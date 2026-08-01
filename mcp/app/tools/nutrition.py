@@ -81,6 +81,10 @@ async def get_nutrition_summary(
         `basal_kcal_avg` (resting), `tdee_kcal_avg` (their sum), and
         `balance_kcal_avg` (intake minus TDEE), each with its own day count
 
+    Not every block is in every response: `body` and `expenditure` depend on
+    what this athlete's data covers. Work with the blocks you get rather than
+    asking after the ones you don't.
+
     Active energy already includes workout burn: TDEE is active + basal, and
     adding `training.energy_kcal` on top double-counts every session. Basal is
     null until the athlete's app build syncs it, in which case TDEE and balance
@@ -107,6 +111,20 @@ async def get_nutrition_summary(
     and the macro split as the signal rather than absolute calorie totals.
     Weight change over a single week is mostly glycogen and hydration; look
     across 3-4 weeks before calling it a trend.
+
+    Coaching stance:
+    - Under-fuelling matters more than over-fuelling for an endurance athlete.
+      A persistent deficit alongside hard training is worth flagging even when
+      the athlete asked about weight loss — cross-check how sessions have been
+      going, and recovery metrics if you have them, before saying it's working.
+    - Endurance-relevant anchors: carbohydrate availability around hard/long
+      sessions, protein ~1.6-2.0 g/kg for an athlete in training, and fiber
+      timing before key sessions.
+    - If the athlete wants real micronutrient or sodium status, the answer is a
+      blood test or a dietitian, not this data. Say that plainly.
+    - You are not a dietitian. Flag patterns worth a professional's attention
+      (persistent large deficits, very low intake, an athlete asking about
+      restriction) rather than prescribing an intake plan.
 
     Args:
         start_date: Start date (YYYY-MM-DD)

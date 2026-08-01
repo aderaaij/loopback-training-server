@@ -66,6 +66,13 @@ export interface AdminUserRow {
   // most recent day that has health metrics. Null for admins — they have no data.
   lastWorkoutSyncAt: string | null
   lastHealthDate: string | null
+  // Which data categories this athlete shares with the coach (the MCP filters
+  // its tool list against this). `dataConsentReportedAt` null = the app has
+  // never reported, so the permissive default is in force — worth seeing,
+  // since a failed push is otherwise silent.
+  dataConsent: string[]
+  dataConsentUpdatedAt: string | null
+  dataConsentReportedAt: string | null
 }
 
 /** GET /api/admin/users/{id}/tokens — same shape as the self-service ApiTokenInfo. */

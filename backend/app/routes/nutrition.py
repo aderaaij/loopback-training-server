@@ -1,10 +1,12 @@
 from datetime import date, datetime, time, timedelta, timezone as dt_timezone
 
 from fastapi import APIRouter, HTTPException, Query, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 
 from app.auth import CurrentUser
+from app.data_consent import ACTIVITY, BODY, NUTRITION, CurrentConsent
 from app.database import DbSession
 from app.models.health_metrics import DailyHealthMetrics
 from app.models.nutrition import NUTRIENT_COLUMNS, UPSERT_COLUMNS, DailyNutrition
@@ -81,11 +83,13 @@ def bulk_upsert_nutrition(payload: NutritionBulkCreate, db: DbSession, user: Cur
 def list_nutrition(
     db: DbSession,
     user: CurrentUser,
+    consent: CurrentConsent,
     start_date: date = Query(...),
     end_date: date | None = None,
     limit: int | None = Query(default=None, ge=1, le=1000),
 ):
     """Daily rows, newest first. Days with no logged food have no row at all."""
+    consent.require(NUTRITION)
     q = (
         select(DailyNutrition)
         .where(DailyNutrition.user_id == user.id, DailyNutrition.date >= start_date)
@@ -100,13 +104,14 @@ def list_nutrition(
 
 
 @router.delete("/{day}", response_model=NutritionDeleteResponse)
-def delete_nutrition_day(day: date, db: DbSession, user: CurrentUser):
+def delete_nutrition_day(day: date, db: DbSession, user: CurrentUser, consent: CurrentConsent):
     """Remove a whole day's row.
 
     For data that should never have been stored at all — a stray day a backfill
     swept in, or a row from a source since found untrustworthy. To retract
     individual fields while keeping the day, use `clear` on the upsert instead.
     """
+    consent.require(NUTRITION)
     row = db.scalar(
         select(DailyNutrition).where(
             DailyNutrition.user_id == user.id, DailyNutrition.date == day
@@ -125,6 +130,7 @@ def delete_nutrition_day(day: date, db: DbSession, user: CurrentUser):
 def nutrition_summary(
     db: DbSession,
     user: CurrentUser,
+    consent: CurrentConsent,
     start_date: date = Query(...),
     end_date: date | None = None,
     period: str = Query(default="week", pattern="^(week|month)$"),
@@ -140,6 +146,7 @@ def nutrition_summary(
     average intake against weight movement and the load that earned it, without
     the caller having to align three series by hand.
     """
+    consent.require(NUTRITION)
     end = end_date or date.today()
     if end < start_date:
         raise HTTPException(
@@ -233,9 +240,31 @@ def nutrition_summary(
         energy=energy,
         complete_through=complete_through,
     )
-    return NutritionSummary(
+    summary = NutritionSummary(
         period=period,
         start_date=start_date,
         end_date=end,
         periods=[NutritionPeriod(**p) for p in periods],
     )
+    if not consent.applied:
+        return summary
+
+    # This payload spans four domains, which is easy to miss because its name
+    # says nutrition: `body` is weight, `expenditure` is active/basal energy,
+    # `training` is workouts. Gating the whole endpoint on `nutrition` alone
+    # would disclose the other two. `protein_g_per_kg` goes with `body` — it is
+    # weight data wearing a nutrition name, which is how derived fields leak.
+    drop: set[str] = set()
+    if not consent.allows(BODY):
+        drop |= {"body", "protein_g_per_kg"}
+    if not consent.allows(ACTIVITY):
+        # Includes balance: intake minus TDEE is not reportable without TDEE.
+        drop.add("expenditure")
+    if not drop:
+        return summary
+
+    payload = summary.model_dump(mode="json")
+    for entry in payload["periods"]:
+        for key in drop:
+            entry.pop(key, None)
+    return JSONResponse(payload)

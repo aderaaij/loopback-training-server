@@ -10,6 +10,70 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [0.1.12] — 2026-07-31
+
+### Added
+
+- **Per-domain data consent.** The athlete chooses in the iOS app which
+  categories of health data the coach may read — `training`, `recovery`,
+  `body`, `activity`, `nutrition` — and the app reports the set on every
+  launch. `PUT /api/me/data-consent` stores it (`GET` reads it back); the set
+  replaces wholesale rather than merging, `training` is always included, and
+  unknown domain strings are stored rather than rejected so a newer app can't
+  have its consent push broken by an older server.
+
+  The default for an athlete who has never reported is **all five domains**.
+  An absent record means "not yet reported", not "restricted": an install
+  predating consent had no way to limit anything, and reading that silence as
+  a restriction would strip a working coach of its context. The window where a
+  failed push leaves a domain shared is one app launch.
+
+- **The MCP advertises only the tools the athlete shares.** `get_nutrition`,
+  `get_nutrition_summary` and `get_health_metrics` are dropped from
+  `tools/list` when their domains aren't shared. Filtering the list rather
+  than refusing the call is the point: a tool that is listed and then errors
+  produces a coach that retries, apologises and tells the athlete to go enable
+  sleep tracking — the nagging the app's own surfaces exist to avoid. A tool
+  that was never listed is never reasoned about.
+
+- **Reads are column-filtered, not just tool-filtered.** `recovery`, `body`
+  and `activity` are columns of one `daily_health_metrics` row, so tool-level
+  filtering alone would disclose all three together. Requests carrying
+  `X-Consent-Scope` (which the MCP sends on every call it makes) get the row
+  with unshared columns **absent** — not null, since null already means "not
+  tracked" and the coach would report a gap the athlete doesn't have. The
+  athlete's own dashboard and the iOS app send no such header and are
+  unaffected. `GET /api/nutrition*` and the sleep-sample read answer 403 when
+  their domain isn't shared, with a message that says *not shared*, never
+  *not recorded*.
+
+- Admin **Users** screen shows what each athlete shares, flagging
+  **"not reported"** in amber — otherwise a consent push that never lands is
+  indistinguishable from an athlete who chose everything.
+
+### Changed
+
+- **`GET /api/nutrition/summary` respects consent per block.** The payload is
+  named for nutrition but carries `body` (weight) and `expenditure`
+  (active/basal energy) too, so gating it on `nutrition` alone would have
+  disclosed both. `body` and the weight-derived `protein_g_per_kg` need
+  `body`; `expenditure` — including the balance, which is not reportable
+  without a TDEE — needs `activity`.
+
+- **Domain guidance moved from the server instructions onto the tools.** The
+  instructions are fixed when a connection opens, before any middleware runs,
+  so they reach every athlete regardless of what they share — a page about
+  nutrition tooling for a coach with no nutrition tool. Tool descriptions ship
+  only when their tool does, and they already carried most of the same text in
+  near-identical words. The instructions keep what holds for every athlete
+  (training, continuity, plans, queue, units); the health and nutrition
+  guidance now lives on `get_health_metrics` and `get_nutrition_summary`.
+
+- `auth_events` gained `data_consent_changed`, written only when the reported
+  set actually differs. `data_consent_reported_at` is stamped on every report
+  so "never reported" stays distinguishable from "reported, unchanged" — one
+  timestamp cannot answer both questions.
+
 ## [0.1.11] — 2026-07-31
 
 ### Fixed

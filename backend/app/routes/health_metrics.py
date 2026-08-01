@@ -1,10 +1,12 @@
 from datetime import date
 
 from fastapi import APIRouter, Query
+from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 
 from app.auth import CurrentUser
+from app.data_consent import METRIC_DOMAINS, CurrentConsent, metric_fields_for
 from app.database import DbSession
 from app.models.health_metrics import DailyHealthMetrics
 from app.schemas.health_metrics import (
@@ -70,9 +72,19 @@ def bulk_upsert_metrics(payload: HealthMetricsBulkCreate, db: DbSession, user: C
 def list_metrics(
     db: DbSession,
     user: CurrentUser,
+    consent: CurrentConsent,
     start_date: date = Query(...),
     end_date: date | None = None,
 ):
+    """Daily rows for the athlete.
+
+    One row spans three consent domains — `recovery`, `body` and `activity` are
+    columns here, not separate tables — so a consent-scoped caller (the coach,
+    see app/data_consent.py) gets the row with the unshared columns *absent*
+    rather than null: null already means "not tracked" in this payload, and
+    conflating the two would have the coach report a gap the athlete doesn't
+    have. Unscoped callers (the dashboard, the iOS app) are untouched.
+    """
     q = (
         select(DailyHealthMetrics)
         .where(DailyHealthMetrics.user_id == user.id, DailyHealthMetrics.date >= start_date)
@@ -81,4 +93,17 @@ def list_metrics(
     if end_date:
         q = q.where(DailyHealthMetrics.date <= end_date)
 
-    return db.scalars(q).all()
+    rows = db.scalars(q).all()
+    if not consent.applied:
+        return rows
+
+    consent.require(*METRIC_DOMAINS)
+    allowed = metric_fields_for(consent.domains)
+    # A Response bypasses response_model validation, which is the point: the
+    # model would re-add the dropped keys as null.
+    return JSONResponse(
+        [
+            {k: v for k, v in HealthMetricsRead.model_validate(r).model_dump(mode="json").items() if k in allowed}
+            for r in rows
+        ]
+    )

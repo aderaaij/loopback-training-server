@@ -5,4 +5,4 @@ surfaces it at /api/health and /api/admin/system. Bump it when cutting a
 release — see README "Releases & upgrading".
 """
 
-__version__ = "0.1.11"
+__version__ = "0.1.12"

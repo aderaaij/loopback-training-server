@@ -20,15 +20,25 @@ async def get_health_metrics(
 ) -> list | dict:
     """Get daily health metrics synced from HealthKit.
 
-    Returns metrics like sleep, resting heart rate, HRV, weight, VO2Max,
-    steps, active energy, basal energy, body fat, respiratory rate, and SpO2.
+    One row per day. Which metrics a row carries varies by athlete — sleep,
+    resting HR, HRV, respiratory rate, SpO2, weight, body composition, VO2Max,
+    steps and energy are all possible. Read the fields that are present rather
+    than assuming a fixed set; a field that isn't there is not a zero, and not
+    something to ask the athlete to start recording.
 
-    `active_energy_burned` is movement + exercise (it already includes workout
-    calories); `basal_energy_burned` is resting burn, and may be null on older
-    app builds. Their sum is total daily expenditure. For anything comparing
-    expenditure against intake, prefer get_nutrition_summary — it aligns both
-    sides on the same periods and excludes days still in progress, which these
-    raw rows do not.
+    Where energy is present: `active_energy_burned` is movement + exercise (it
+    already includes workout calories); `basal_energy_burned` is resting burn,
+    and may be null on older app builds. Their sum is total daily expenditure.
+    For anything comparing expenditure against intake, prefer
+    get_nutrition_summary — it aligns both sides on the same periods and
+    excludes days still in progress, which these raw rows do not.
+
+    Use these to correlate recovery/readiness with training patterns:
+    - Low HRV + poor sleep → suggest an easier workout or a rest day
+    - Declining resting HR trend → improving cardiovascular fitness
+    - Weight/body composition trends alongside training volume
+    - Steps and active energy alongside training load: how much of the day's
+      movement was the session, and how much was the rest of life
 
     Args:
         start_date: Start date (YYYY-MM-DD)

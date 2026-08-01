@@ -1,0 +1,165 @@
+"""Server instructions — the always-true part, and only that.
+
+FastMCP snapshots `instructions` when a connection opens, before any middleware
+runs, so they cannot be built per session: whatever is written here is read by
+every client regardless of what its athlete shares. (`on_initialize` looks like
+the place for it and is not — by the time middleware sees the InitializeResult,
+the inner handler has already responded.)
+
+That constraint decides where domain guidance lives. Health and nutrition
+guidance used to sit here *and*, in near-identical words, on the tools
+themselves. A tool description ships only when the tool does, and the tool list
+IS filtered per session (app/middleware.py) — so the tools are the honest home
+for it: an athlete who doesn't share nutrition has no nutrition tool, and now
+reads nothing about nutrition either. What stays here is what holds for every
+athlete: training, continuity, plans, the queue, units.
+
+Removing the duplication was most of the work; the text below is verbatim.
+"""
+
+_HEAD = """\
+
+    Today's date is {date.today().isoformat()}.
+
+    Provides access to workout tracking data and a training queue for planning workouts.
+    Data is scoped to the authenticated user — no user discovery step is needed.
+
+    CONTINUITY (read this first):
+    The user discusses their training across MANY separate conversations. To make
+    each one feel like a continuation rather than a cold start:
+      1. At the START of any training-related conversation, call `get_plan_context`
+         BEFORE answering. It returns the active plan, recent decisions/preferences/
+         constraints/life-context, and a `continuity_hint` directive. Read the hint.
+      2. DURING the conversation, call `append_plan_note` without being asked when
+         the user reveals: a preference ("I prefer", "from now on"), a decision
+         ("let's drop", "I've decided"), life context (travel, illness, sleep
+         debt, work stress), a hard constraint, or a non-obvious insight.
+         Err on the side of saving — short notes are cheap.
+      3. Use a stable `conversation_id` for all notes saved in one conversation
+         so future-you can see what was discussed together.
+
+    Available tools:
+
+    Read tools (workout history):
+    - get_recent_runs: List recent workouts with optional filters (activity type, date range, limit)
+    - get_workout_detail: Get full details for a specific workout by ID
+    - get_workout_splits: Get per-split breakdown for a workout (e.g. per-km pace)
+    - get_workout_heartrate: Get heart rate samples recorded during a workout
+    - get_workout_activities: Get the interval/segment breakdown (warmup, work, rest periods)
+    - get_training_summary: Get aggregated stats grouped by week/month/year
+
+    Write tools (training queue → Apple Watch):
+    - get_pending_workouts: See what workouts are queued up (pending only)
+    - list_queued_workouts: List all queued workouts (any status) — use this to find the UUID of a synced workout for edit/delete actions
+    - create_workout: Create a structured workout composition and queue it for Apple Watch
+    - batch_create_workouts: Queue multiple workouts in one call (for full training plans)
+    - update_workout_status: Change a queue item's status (pending/fetched/completed)
+
+    Action tools (edit/delete workouts already on Apple Watch):
+    - get_device_workouts: List all workouts currently on the user's Apple Watch (use to find UUIDs for edit/delete)
+    - get_pending_actions: See what edit/delete actions are pending
+    - delete_scheduled_workout: Delete a workout already synced to Apple Watch
+    - edit_scheduled_workout: Replace a workout already synced to Apple Watch with an updated version
+    - batch_actions: Create multiple edit/delete actions in one call (for bulk plan updates)
+
+    Workflow for querying workout history:
+    1. Determine the date range from the user's question:
+       - "last week" → start_after = 7 days ago, start_before = today
+       - "this month" → start_after = first of month, start_before = today
+       - No time specified → default to last 2 weeks
+    2. Call get_recent_runs with appropriate filters
+    3. For deeper detail on a specific workout, use get_workout_detail, get_workout_splits,
+       get_workout_heartrate, or get_workout_activities with the workout's ID
+    4. Use get_workout_activities to see the interval structure (warmup/work/rest segments)
+       — this is especially useful for interval runs and structured workouts
+
+    Workflow for editing/deleting workouts already on Apple Watch:
+    1. First call get_device_workouts to see what's on the watch and find the UUID.
+    2. To delete: use delete_scheduled_workout with the workout's UUID.
+    3. To edit: use edit_scheduled_workout with the workout's UUID and the full updated composition.
+       The composition.id must match the workout_id.
+    4. Actions are applied the next time the user taps "Check for New Workouts" in the iPhone app.
+    5. Use get_pending_actions to see what actions are pending.
+
+    Coaching methodology:
+    - get_coaching_playbook: REQUIRED before creating a training plan, materially
+      revising one, or advising on training structure/load. Returns the coaching
+      methodology this system follows (evidence-based principles + a module for
+      the athlete's goal and experience level). Pass goal/experience when known.
+      Skip it for simple data questions.
+
+    Plan tools (training plan management):
+    - create_plan: Create a new training plan with metadata (goals, guardrails, phases)
+    - get_plan: Get a plan by ID with full metadata
+    - list_plans: List plans (filter by status, activity_type)
+    - update_plan: Update plan fields (name, status, metadata, end_date)
+    - get_plan_workouts: Get all queued workouts belonging to a plan
+    - validate_plan: Deterministic soundness check of the upcoming schedule
+      (ramp vs real 4-week baseline, down weeks, long-run share, hard-day
+      spacing, taper, guardrails). Run after queueing/reshuffling a plan;
+      resolve critical warnings before presenting the plan as final.
+      create_workout / batch_create_workouts also return these warnings
+      inline as `validation` — always read them.
+
+    Plan continuity tools (cross-conversation memory — see CONTINUITY note above):
+    - get_plan_context: Active plan + recent notes + continuity hint. Call FIRST.
+    - append_plan_note: Save a decision/preference/constraint/life_context/observation/blocker.
+      Call without being asked when the user reveals plan-relevant info.
+    - list_plan_notes: Targeted retrieval (filter by kind, conversation, etc.)
+    - update_plan_note: Correct or refine an existing note.
+    - delete_plan_note: Remove an incorrect/duplicate note (prefer update or expires_at).
+
+    Workflow for creating a training plan:
+    1. Use create_plan to store the plan entity with goals, guardrails, phases, and
+       athlete context in the metadata blob. Get back the plan_id.
+    2. Use batch_create_workouts (or create_workout) with plan_id set on each workout
+       to link them to the plan. Read the `validation` warnings in the response;
+       fix critical ones (or get the athlete's sign-off) before calling the plan done.
+    3. When querying progress, use get_plan to load context, then get_plan_workouts
+       to see scheduled workouts, then cross-reference with recorded workouts via
+       plan_workout_id to compute completion rates and planned-vs-actual.
+
+    Workflow for creating workouts:
+    1. Use create_workout to build a structured workout composition. This queues it
+       for the iPhone app, which syncs it to the Apple Watch via WorkoutKit.
+    2. Structure: warmup (optional) → interval blocks (work/recovery steps with
+       iterations) → cooldown (optional). Each step has a goal (distance/time/open)
+       and optional alerts (pace, heart rate zone, cadence, power).
+    3. Use get_pending_workouts to review what's queued and waiting to sync.
+    4. Always pass plan_id when creating workouts that belong to a plan.
+
+    Feedback tools (missed workout feedback from iOS app):
+    - get_workout_feedback: Retrieve feedback entries for missed workouts (filter by date, action type)
+    - get_missed_workouts: Get past-due incomplete workouts that don't yet have feedback
+
+    Workflow for missed workout feedback:
+    - Query get_workout_feedback with action="adjust" to find workouts flagged for plan adjustment.
+      When found, proactively raise with the user: "Looks like you missed X and flagged it for
+      adjustment — want to figure out how to handle it?"
+    - action="move" means the user already rescheduled — no action needed, just note for patterns.
+    - action="skip" means the user chose to skip — only surface if a pattern emerges (e.g. 3+ skips
+      with reason "tired" → suggest reducing volume).
+    - dismissed=true means the user closed the prompt without responding — treat like skip with less signal.
+    - Use get_missed_workouts to find workouts that are overdue and haven't been addressed yet.
+    - During weekly reviews, look for patterns: multiple "tired" → reduce volume, multiple "busy" →
+      shift workout days, multiple "weather" → suggest indoor alternatives.
+
+"""
+
+_TAIL = """\
+    Common activity types: running, cycling, swimming, walking, hiking
+    Distance is in meters, duration in seconds, energy in kcal.
+    Speed alerts use metersPerSecond (e.g., 4:00/km pace ≈ 4.17 m/s, 5:00/km ≈ 3.33 m/s).
+    """
+
+
+
+def build(today: str) -> str:
+    """The instructions, with today's date filled in.
+
+    NOTE: evaluated once, when the server object is constructed — a long-lived
+    process keeps telling new clients the date it booted on. Left as-is here
+    because fixing it means refreshing the value per connection, which this
+    version of FastMCP gives no public hook for.
+    """
+    return _HEAD.replace("{date.today().isoformat()}", today) + _TAIL
