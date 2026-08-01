@@ -39,8 +39,8 @@
 }
 .nut-row {
   display: grid;
-  grid-template-columns: 74px 60px 62px 128px 56px 108px 1fr;
-  gap: 10px;
+  grid-template-columns: 70px 52px 52px 52px 74px 116px 48px 100px 1fr;
+  gap: 9px;
   align-items: center;
   padding: 7px 0;
   border-top: 1px solid var(--row-line);
@@ -63,11 +63,12 @@
 
 @media (max-width: 860px) {
   .nut-row {
-    grid-template-columns: 68px 52px 56px 1fr;
+    grid-template-columns: 64px 46px 48px 48px 1fr;
   }
   /* Drop the trailing columns rather than crush them; the charts above carry
-     the same information at narrow widths. */
-  .nut-row > span:nth-child(n + 5) {
+     the same information at narrow widths. Week / logged / in / out / balance
+     survive, so the energy question is still answerable on a phone. */
+  .nut-row > span:nth-child(n + 6) {
     display: none;
   }
 }

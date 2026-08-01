@@ -271,7 +271,11 @@ export interface HealthMetricsDay {
   weight: number | null
   vo2_max: number | null
   steps: number | null
+  /** Movement + exercise. Already includes workout burn — never add a workout's
+   *  own energy on top, that double-counts the session. */
   active_energy_burned: number | null
+  /** Resting burn. Null on days synced by an app build that predates it. */
+  basal_energy_burned: number | null
   body_fat_percentage: number | null
   lean_body_mass: number | null
   respiratory_rate: number | null
@@ -315,16 +319,33 @@ export interface NutritionPeriod {
   nutrition: Record<string, number | null>
   protein_g_per_kg: number | null
   body: {
+    weigh_ins: number
     weight_avg: number | null
     weight_start: number | null
     weight_end: number | null
+    /** Least-squares fit across the readings' span, NOT last minus first. */
     weight_change: number | null
+    /** Residual scatter around that fit — a change of the same order is noise. */
+    weight_sd: number | null
   }
   training: {
     workouts: number
     distance_km: number | null
     duration_min: number | null
+    /** Workout burn only. A subset of expenditure.active_kcal_avg, not an addend. */
     energy_kcal: number | null
+  }
+  /** Energy out. Each average carries its own day count because the three cover
+   *  different day sets — a balance needs a day with both a complete intake and
+   *  a complete TDEE, so it is routinely the smallest of them. */
+  expenditure: {
+    days_with_energy: number
+    active_kcal_avg: number | null
+    basal_kcal_avg: number | null
+    days_with_tdee: number
+    tdee_kcal_avg: number | null
+    days_with_balance: number
+    balance_kcal_avg: number | null
   }
 }
 

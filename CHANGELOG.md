@@ -51,6 +51,42 @@ System screen.
   **"not reported"** in amber — otherwise a consent push that never lands is
   indistinguishable from an athlete who chose everything.
 
+- **Dashboard: "Energy in vs out" on the Health screen.** The energy-balance
+  numbers the API has computed since 0.1.10 were never surfaced anywhere. The
+  Nutrition block now leads with a per-day chart of food logged against energy
+  burned, and the week-by-week table gained **In / Out / Balance** columns
+  (`expenditure.tdee_kcal_avg` and `balance_kcal_avg`, each with the day count
+  backing it).
+
+  Drawn as a bullet chart — burn is the container, food is how much of it got
+  filled — because shading the difference as its own block made it read as a
+  second *stacked* segment, i.e. as something added to intake rather than the
+  room left above it. A day is paired only when it holds both a complete
+  intake and a complete TDEE: **today is always excluded** (health metrics
+  carry no `partial` flag, so a day in progress stores the hours elapsed and
+  looks like a genuinely low-burn day), and a day missing basal gets no burn
+  line rather than falling back to active alone — active is about a third of
+  the total, so that fallback would invent a ~2000 kcal deficit out of a
+  missing column.
+
+- **Dashboard: hover tooltips on every chart.** All nine hand-rolled SVG charts
+  (recovery, sleep, weight, steps, energy balance, macros, protein per kg,
+  heart-rate trace, cadence) now report the value under the pointer, with the
+  hovered mark highlighted and the rest dimmed. Line and dot charts also get a
+  crosshair and an on-line marker. They previously carried SVG `<title>`
+  elements, which the browser renders as a slow native tooltip that can't show
+  more than one line and never appears on a line chart's individual points.
+
+  One primitive in `components/charts.tsx` (`useChartHover` + `ChartTooltip`)
+  rather than nine implementations. It resolves the pointer against the wrapper
+  element's rect, not the SVG: every chart here stretches a fixed viewBox with
+  `preserveAspectRatio="none"`, so viewBox units are not screen pixels and the
+  event's SVG coordinate is meaningless. The tooltip pins to the top corner
+  *away* from the hovered mark instead of tracking it — a tooltip centred on
+  the mark covers it whenever the card is short (150px card vs ~140px
+  tooltip), and one that tracks horizontally has no width it can clamp itself
+  to without measuring, so it overflows on a narrow screen.
+
 ### Changed
 
 - **`GET /api/nutrition/summary` respects consent per block.** The payload is

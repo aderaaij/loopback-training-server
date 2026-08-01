@@ -6,11 +6,16 @@ import { usePageHeader } from '../components/PageHeader'
 // Leaflet is ~150 kB — only fetched when a workout actually has a route.
 const RouteMap = lazy(() => import('../components/RouteMap').then((m) => ({ default: m.RouteMap })))
 import {
+  ChartTooltip,
+  Crosshair,
   GridLines,
   HR_ZONE_LEGEND,
+  TipRow,
   areaFromLine,
+  bucketElapsed,
   downsample,
   linePath,
+  useChartHover,
   zoneBands,
 } from '../components/charts'
 import { ConfirmDialog, ErrorNote, Loading, SectionLabel, StatusPill } from '../components/ui'
@@ -60,6 +65,10 @@ function HrTrace({ samples }: { samples: TimedSample[] }) {
   const bands = useMemo(() => zoneBands(min, max, W, H), [min, max])
   const avg = Math.round(samples.reduce((a, s) => a + s.value, 0) / samples.length)
   const peak = Math.round(Math.max(...samples.map((s) => s.value)))
+  const hover = useChartHover(values.length, 'point')
+  const px = (i: number) => (values.length > 1 ? (i * W) / (values.length - 1) : W / 2)
+  const bpm = hover.index != null ? values[hover.index] : null
+  const elapsed = hover.index != null ? bucketElapsed(samples, hover.index, values.length) : null
 
   return (
     <div className="chart-card">
@@ -69,20 +78,42 @@ function HrTrace({ samples }: { samples: TimedSample[] }) {
           {avg} avg · {peak} max
         </span>
       </div>
-      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-        {bands.map((b) => (
-          <rect key={b.key} x={0} y={b.y} width={b.w} height={b.h} fill={b.color} />
-        ))}
-        <path d={areaFromLine(path, W, H)} fill="color-mix(in srgb, var(--accent) 13%, transparent)" />
-        <path
-          d={path}
-          fill="none"
-          stroke="var(--accent)"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
+      <div className="chart-hover" {...hover.bind}>
+        <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+          {bands.map((b) => (
+            <rect key={b.key} x={0} y={b.y} width={b.w} height={b.h} fill={b.color} />
+          ))}
+          <path d={areaFromLine(path, W, H)} fill="color-mix(in srgb, var(--accent) 13%, transparent)" />
+          <path
+            d={path}
+            fill="none"
+            stroke="var(--accent)"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          {hover.index != null && bpm != null && (
+            <>
+              <Crosshair x={px(hover.index)} h={H} />
+              <circle cx={px(hover.index)} cy={H - ((bpm - min) / (max - min)) * H} r={4}
+                fill="var(--accent)" stroke="var(--card-deep)" strokeWidth="2" />
+            </>
+          )}
+        </svg>
+        <ChartTooltip index={hover.index} count={values.length} mode="point">
+          {bpm != null && (
+            <>
+              {elapsed != null && <span className="tip-date">{fmtDuration(elapsed)} in</span>}
+              <TipRow color="var(--accent)" label="Heart rate" value={`${Math.round(bpm)} bpm`} />
+              <TipRow label="Zone" value={zoneOf(bpm)} />
+              {/* The trace is downsampled to ~140 buckets, so a reading is a
+                  bucket mean rather than one sample — say so instead of
+                  implying instrument precision. */}
+              <span className="tip-note">Averaged over ~{Math.max(1, Math.round(samples.length / values.length))} samples</span>
+            </>
+          )}
+        </ChartTooltip>
+      </div>
       <div className="chart-legend">
         {HR_ZONE_LEGEND.map((z) => (
           <span className="cl" key={z.name}>
@@ -356,6 +387,8 @@ function Splits({ splits }: { splits: WorkoutSplit[] }) {
 
 function CadenceChart({ samples }: { samples: TimedSample[] }) {
   const values = useMemo(() => downsample(samples.map((s) => s.value), 26), [samples])
+  // Before the early return — the hook count must not depend on the data.
+  const hover = useChartHover(values.length)
   if (values.length === 0) return null
   const avg = Math.round(samples.reduce((a, s) => a + s.value, 0) / samples.length)
   const W = 560
@@ -363,6 +396,8 @@ function CadenceChart({ samples }: { samples: TimedSample[] }) {
   const min = Math.min(...values)
   const max = Math.max(...values)
   const bw = W / values.length
+  const spm = hover.index != null ? values[hover.index] : null
+  const elapsed = hover.index != null ? bucketElapsed(samples, hover.index, values.length) : null
 
   return (
     <div className="chart-card">
@@ -370,27 +405,38 @@ function CadenceChart({ samples }: { samples: TimedSample[] }) {
         <SectionLabel>Cadence</SectionLabel>
         <span className="mono-meta">{avg} avg spm</span>
       </div>
-      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-        <GridLines w={W} h={H} rows={2} />
-        {values.map((v, i) => {
-          const h = max === min ? H * 0.6 : 20 + ((v - min) / (max - min)) * (H - 40)
-          return (
-            <rect
-              key={i}
-              x={i * bw + bw * 0.15}
-              y={H - h}
-              width={bw * 0.7}
-              height={h}
-              rx={3}
-              fill={
-                i === values.length - 1
-                  ? 'var(--accent)'
-                  : 'color-mix(in srgb, var(--accent) 40%, #3A332A)'
-              }
-            />
-          )
-        })}
-      </svg>
+      <div className="chart-hover" {...hover.bind}>
+        <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+          <GridLines w={W} h={H} rows={2} />
+          {values.map((v, i) => {
+            const h = max === min ? H * 0.6 : 20 + ((v - min) / (max - min)) * (H - 40)
+            return (
+              <rect
+                key={i}
+                x={i * bw + bw * 0.15}
+                y={H - h}
+                width={bw * 0.7}
+                height={h}
+                rx={3}
+                opacity={hover.index != null && hover.index !== i ? 0.4 : 1}
+                fill={
+                  i === values.length - 1
+                    ? 'var(--accent)'
+                    : 'color-mix(in srgb, var(--accent) 40%, #3A332A)'
+                }
+              />
+            )
+          })}
+        </svg>
+        <ChartTooltip index={hover.index} count={values.length}>
+          {spm != null && (
+            <>
+              {elapsed != null && <span className="tip-date">{fmtDuration(elapsed)} in</span>}
+              <TipRow color="var(--accent)" label="Cadence" value={`${Math.round(spm)} spm`} />
+            </>
+          )}
+        </ChartTooltip>
+      </div>
     </div>
   )
 }

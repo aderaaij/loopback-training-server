@@ -209,6 +209,78 @@
   border-radius: 2px;
 }
 
+/* ── chart hover ── */
+/* Wraps the <svg> only, so the tooltip's top: 0 is the top of the plot area
+   rather than the top of the card. */
+.chart-hover {
+  position: relative;
+  touch-action: pan-y;
+}
+.chart-tip {
+  position: absolute;
+  top: 0;
+  z-index: 3;
+  min-width: 132px;
+  /* Bounded by the card, so it cannot overflow on a narrow screen. */
+  max-width: min(240px, 76%);
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.55);
+  font-size: 11.5px;
+  line-height: 1.45;
+  /* Never eats the pointer — it sits over the plot the pointer is tracking,
+     and capturing the move would make the hover flicker on and off. */
+  pointer-events: none;
+}
+/* Pinned to the corner opposite the hovered mark. */
+.chart-tip[data-side='left'] {
+  left: 0;
+}
+.chart-tip[data-side='right'] {
+  right: 0;
+}
+.chart-tip .tip-date {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 5px;
+}
+.chart-tip .tip-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+.chart-tip .tip-sw {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex: none;
+}
+.chart-tip .tip-label {
+  color: var(--text-3);
+}
+.chart-tip .tip-value {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  color: var(--text);
+}
+.chart-tip .tip-note {
+  display: block;
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid var(--row-line);
+  color: var(--muted);
+  font-size: 10.5px;
+  white-space: normal;
+  max-width: 210px;
+}
+
 .effort-card {
   border-radius: 20px;
   background: var(--card);
