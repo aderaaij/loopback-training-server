@@ -252,7 +252,8 @@ def validate_schedule(
 
     # ── per-week checks: ramp rate, long-run share, guardrails, rest days ──
     for wk in evaluated:
-        prior = [total(wk - timedelta(weeks=i)) for i in range(1, 5)]
+        prior_weeks = [wk - timedelta(weeks=i) for i in range(1, 5)]
+        prior = [total(w) for w in prior_weeks]
         baseline = sum(prior) / 4 if (has_history or any(prior)) else None
         ratio = round(total(wk) / baseline, 2) if baseline and baseline >= MIN_BASELINE_KM else None
         week_km = total(wk)
@@ -260,11 +261,34 @@ def validate_schedule(
 
         if ratio is not None:
             severity = "critical" if ratio > RAMP_CRITICAL_RATIO else "warn" if ratio > RAMP_WARN_RATIO else None
+            # A layoff inside the 4-week window drags the baseline down and
+            # inflates every ratio measured against it — the athlete cannot
+            # comply without prescribing detraining, and an unfixable
+            # `critical` teaches the reader to discount the word. Zero weeks
+            # are still counted (dropping them would silently redefine the
+            # average as "weeks you happened to run", and let a 2-week layoff
+            # resume at full volume with no warning at all), but the severity
+            # is capped and the constituent weeks ship with the warning so the
+            # number can be checked rather than trusted.
+            rest_weeks = [w for w, km in zip(prior_weeks, prior) if km == 0.0]
+            if severity == "critical" and rest_weeks:
+                severity = "warn"
             if severity:
+                note = (
+                    f" Baseline spans {len(rest_weeks)} week(s) with no running "
+                    f"({', '.join(w.isoformat() for w in rest_weeks)}), which lowers it."
+                    if rest_weeks else ""
+                )
                 warn("ramp_rate", severity,
                      f"Week of {wk.isoformat()}: {week_km:.0f} km vs 4-week baseline "
-                     f"{baseline:.0f} km ({ratio:.2f}×). Playbook guideline is ≤1.3×.",
-                     week=wk, data={**data, "ratio": ratio}, estimated=week_estimated[wk])
+                     f"{baseline:.0f} km ({ratio:.2f}×). Playbook guideline is ≤1.3×.{note}",
+                     week=wk,
+                     data={**data, "ratio": ratio,
+                           "baseline_weeks": [
+                               {"week": w.isoformat(), "km": round(km, 1)}
+                               for w, km in zip(prior_weeks, prior)
+                           ]},
+                     estimated=week_estimated[wk])
         elif week_km > NO_BASELINE_WARN_KM:
             severity = "critical" if week_km > NO_BASELINE_CRITICAL_KM else "warn"
             warn("volume_without_baseline", severity,

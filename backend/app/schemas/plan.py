@@ -44,9 +44,12 @@ class PlanRead(BaseModel):
     metadata: dict[str, Any] = Field(validation_alias="metadata_")
     created_at: datetime
     updated_at: datetime
-    # Computed on read (list/get/complete); create/update responses leave the
-    # defaults. `finishable` = active plan that looks done — the dashboard
-    # offers the celebrate-and-complete flow; nothing flips status by itself.
+    # Computed on every response that returns a plan. `finishable` = active
+    # plan that looks done — the dashboard offers the celebrate-and-complete
+    # flow; nothing flips status by itself. Create/update used to skip this and
+    # return the defaults, which made `finishable: false` a plausible-looking
+    # lie rather than an honest absence: same plan, same second, `get` said
+    # true. `progress: None` at least reads as "not computed".
     progress: PlanProgress | None = None
     finishable: bool = False
 

@@ -13,13 +13,43 @@ Field names are camelCase wherever the wire format is camelCase; workout_data
 is served to the iOS app exactly as stored, so do not "normalize" the casing.
 """
 
+import json
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal, TypeVar
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
+from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
 ActivityType = Literal["running", "cycling", "walking", "hiking", "swimming"]
 Location = Literal["outdoor", "indoor"]
+
+
+def _parse_json_string(v: Any) -> Any:
+    """Accept a JSON string where an object or array is expected.
+
+    Optional params (``X | None``) render as ``anyOf`` in the emitted JSON
+    Schema, which carries no top-level ``"type"`` key. A client that decides
+    "is this structured?" by reading ``schema["type"]`` finds nothing, treats
+    the param as untyped, and serialises the value to a string — so the server
+    sees ``'{"goals": [...]}'`` and pydantic rejects it as ``dict_type``. The
+    annotations and the schema are both already correct; the string arrives
+    anyway, and it arrives from the *model composing the call*, which no
+    server-side schema fix can reach. Required params are unaffected: they get
+    a direct ``"type"`` and round-trip fine.
+
+    A non-JSON string is passed through untouched so the real validator still
+    produces the useful error rather than a parse failure.
+    """
+    if isinstance(v, str):
+        try:
+            return json.loads(v)
+        except ValueError:
+            return v
+    return v
+
+
+T = TypeVar("T")
+# Wrap an optional object/array param so a stringified value is still accepted.
+JsonTolerant = Annotated[T, BeforeValidator(_parse_json_string)]
 
 # Queue lifecycle. The backend stores this column unvalidated and the watch
 # endpoints / calendar filter on exact values, so the tool boundary is the
@@ -27,7 +57,14 @@ Location = Literal["outdoor", "indoor"]
 QueueStatus = Literal["pending", "fetched", "synced", "completed", "skipped"]
 
 # Plan status is also stored unvalidated; the dashboard branches on "active".
-PlanStatus = Literal["active", "completed", "abandoned"]
+# "upcoming" is a plan built ahead of time that must not act like the current
+# one yet — the calendar, the schedule check and plan context all read only
+# active plans, so a future block left active would start competing with the
+# block actually being run. Nothing flips it on the start date; say so.
+# "archived" is in the live data and was missing here, so filtering for it was
+# a validation error; "abandoned" has never been written by anything but is
+# kept because it is the documented way to retire a plan.
+PlanStatus = Literal["active", "upcoming", "completed", "archived", "abandoned"]
 
 # Enforced by the backend (regex / Literal / Query pattern) — mirrored here so
 # the values are visible in the tool schema instead of costing a 422 round trip.

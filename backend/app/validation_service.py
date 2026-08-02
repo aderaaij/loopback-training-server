@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from app.models.plan import Plan
+from app.models.plan import SCHEDULED_STATUSES, Plan
 from app.models.queue import WorkoutQueue
 from app.models.user import User
 from app.models.workout import Workout
@@ -61,7 +61,9 @@ def run_validation(db, user: User, plan: Plan | None = None) -> tuple[list[dict]
     ]
 
     strength_dates = set()
-    for p in db.scalars(select(Plan).where(Plan.user_id == user.id, Plan.status == "active")):
+    for p in db.scalars(
+        select(Plan).where(Plan.user_id == user.id, Plan.status.in_(SCHEDULED_STATUSES))
+    ):
         for session in resolve_sessions((p.metadata_ or {}).get("schedule")):
             strength_dates.add(session["date"])
 

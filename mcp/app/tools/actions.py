@@ -7,6 +7,7 @@ from fastmcp import FastMCP
 from app.schemas import (
     ActivityType,
     IntervalBlock,
+    JsonTolerant,
     Location,
     WorkoutActionItem,
     WorkoutStep,
@@ -92,8 +93,8 @@ async def edit_scheduled_workout(
     location: Location,
     scheduled_date: str,
     blocks: list[IntervalBlock],
-    warmup: WorkoutStep | None = None,
-    cooldown: WorkoutStep | None = None,
+    warmup: JsonTolerant[WorkoutStep | None] = None,
+    cooldown: JsonTolerant[WorkoutStep | None] = None,
 ) -> dict | list:
     """
     Edit a workout that has already been synced to the user's Apple Watch.

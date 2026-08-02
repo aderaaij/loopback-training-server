@@ -10,6 +10,87 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [Unreleased]
+
+### Added
+
+- **`upcoming` plan status, and the distinction it forces.** A block built
+  ahead of its start date used to be `active`, so it competed with the block
+  actually being run: it won "which plan am I on" lookups by being newest, and
+  the dashboard's hero card computed "week 1 of N" off a future start date.
+  `upcoming` separates the two — but only half the readers wanted the new
+  status. Anything reasoning over the *future timeline* (calendar, strength
+  collisions, `next_plan`) needs those sessions, because they are real and
+  dated; only "which plan is current" wants `active` alone. That split is now
+  a named constant (`SCHEDULED_STATUSES`) rather than a literal repeated at
+  each call site, since getting it wrong is silent: the sessions simply don't
+  appear, and a check that finds nothing looks exactly like a check that
+  passed. The MCP `create_plan` gained a `status` argument, without which
+  every plan a coach built landed `active` by default.
+
+### Fixed
+
+- **A schedule could be attached to a running plan, and everything downstream
+  mis-typed itself.** Nothing enforced the docstring's "create it with
+  `activity_type: 'strength'`": the plan's session counts absorbed the gym days
+  (a running plan reporting 27 sessions — 15 queued runs plus 12 strength),
+  calendar entries for gym sessions were stamped `activityType: "running"`, and
+  the iOS app rendered the run block as a gym cycle purely because a schedule
+  was present. `PUT /api/plans/{id}/schedule` now 400s on a non-strength plan.
+  Guarded on write only, so an existing plan can't start 404-ing on read.
+
+- **Calendar strength entries carried the plan's activity type, not the
+  session's.** One entry could claim two vocabularies at once: `activityType:
+  "strength"` beside a `completed` flag computed against
+  `traditionalStrength`. They now agree.
+
+- **An edit ack updated the composition but not the item title.** `title` is a
+  column and `displayName` a key inside `workout_data`; writing only the blob
+  left the list title describing the previous session ("Easy 35 min" on a
+  30-minute run) with nothing marking which of the two was stale. The ack now
+  re-syncs the title — but **only when it was tracking the composition**. A
+  title that already diverged is a deliberate label (coaches annotate the list
+  title, "… (cap 140) — OPTIONAL", while the watch name stays terse), and
+  overwriting it on every ack destroys that. The old blob is still in hand at
+  ack time, so "was it tracking?" is an exact question rather than a guess.
+
+- **Ramp warnings nobody could act on.** A layoff inside the 4-week baseline
+  window drags the baseline down and inflates every ratio measured against it:
+  after a 9-day break, a return at 19 km against a true 17.6 km/wk base scored
+  1.71× and three `critical`s that could only be cleared by prescribing
+  detraining. Zero weeks are still counted — dropping them would silently
+  redefine the average as "the weeks you happened to run", and let a two-week
+  layoff resume at full volume with no warning at all — but a degenerate
+  window now caps severity at `warn` and the warning ships its constituent
+  weeks (`baseline_weeks`) so the number can be checked instead of trusted.
+  The check was also non-monotonic in break length: one week longer and
+  `MIN_BASELINE_KM` disabled it entirely, so a *longer* layoff produced
+  *fewer* warnings.
+
+- **`update_queued_workout` destroyed data on any item past `pending`.** It
+  read the current composition back from the pending-only endpoint, so for a
+  synced item it started from `{}` and the PATCH then dropped `displayName`,
+  `activityType`, `location`, `warmup` and `cooldown`, and nulled
+  `scheduled_date`. It now reads through the full listing and refuses to write
+  at all when the item isn't found, rather than writing a partial blob.
+
+- **Plan create/update responses left `progress` and `finishable` at their
+  defaults.** `progress: null` reads as "not computed", but `finishable: false`
+  is a plausible-looking value indistinguishable from a real one — the same
+  plan in the same second answered `true` on `get`. Both are now computed on
+  every response that returns a plan.
+
+- **MCP tool inputs.** Optional object/array params render as `anyOf` with no
+  top-level `"type"`, and a client reading `schema["type"]` to decide whether a
+  value is structured finds nothing and sends JSON as a string — so `metadata`
+  and `blocks` arrived as `str` and were rejected. The annotations and the
+  emitted schema were both already correct; the string arrives anyway, and it
+  arrives from the model composing the call, which no server-side schema change
+  can reach. All nine affected params now accept a JSON string. Separately,
+  `summary`'s 280-character limit lived only in prose, so it 422'd at the
+  backend instead of failing tool validation, and `PlanStatus` omitted
+  `archived` — a value already in use.
+
 ## [0.1.13] — 2026-08-01
 
 ### Fixed

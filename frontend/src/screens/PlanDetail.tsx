@@ -87,7 +87,12 @@ export function PlanDetail() {
   const { data: plan, isLoading, error } = usePlan(id)
   const { data: schedule } = usePlanSchedule(id)
   const { data: planWorkouts } = usePlanWorkouts(id)
-  const { data: validation } = usePlanValidation(id, plan?.status === 'active')
+  // Upcoming blocks get the schedule check too — reviewing a block before it
+  // starts is when the warnings are actually actionable.
+  const { data: validation } = usePlanValidation(
+    id,
+    plan?.status === 'active' || plan?.status === 'upcoming',
+  )
 
   usePageHeader(
     plan?.name ?? 'Plan',
@@ -191,7 +196,7 @@ export function PlanDetail() {
         </div>
       )}
 
-      {plan.status === 'active' && validation && (validation.warnings.length > 0 || validation.weeks.length > 0) && (
+      {(plan.status === 'active' || plan.status === 'upcoming') && validation && (validation.warnings.length > 0 || validation.weeks.length > 0) && (
         <div className="card" style={{ padding: 20, marginBottom: 18 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
             <SectionLabel>Schedule check</SectionLabel>

@@ -5,7 +5,7 @@ from typing import Any
 
 from fastmcp import FastMCP
 
-from app.schemas import PlanStatus, WeeklyDays
+from app.schemas import JsonTolerant, PlanStatus, WeeklyDays
 from app.services.api_client import client
 from app.wire import text_result
 
@@ -22,7 +22,8 @@ async def create_plan(
     start_date: str,
     end_date: str | None = None,
     description: str | None = None,
-    metadata: dict[str, Any] | None = None,
+    metadata: JsonTolerant[dict[str, Any] | None] = None,
+    status: PlanStatus | None = None,
 ) -> dict | list:
     """Create a new training plan.
 
@@ -43,6 +44,13 @@ async def create_plan(
                 "phases": [{"name": "Base", "weeks": [1, 2], "volume_target_km": 18}],
                 "athlete_context": {"fitness_level": "Detrained"}
             }
+        status: Defaults to "active" — the block being run right now. Pass
+            "upcoming" for a plan built ahead of its start date: it stays out
+            of "which plan am I on" answers, while its sessions still appear
+            in the calendar and schedule checks so the new block can be
+            validated before it starts. Only one plan per activity should be
+            active at a time; if one is already running, the next block is
+            "upcoming" until the athlete starts it.
 
     Returns:
         The created plan with its id.
@@ -53,6 +61,8 @@ async def create_plan(
             "activityType": activity_type,
             "startDate": start_date,
         }
+        if status is not None:
+            body["status"] = status
         if end_date is not None:
             body["endDate"] = end_date
         if description is not None:
@@ -103,7 +113,10 @@ async def list_plans(
     """List training plans.
 
     Args:
-        status: Filter by status — "active", "completed", or "abandoned".
+        status: Filter by status — "active", "upcoming", "completed",
+            "archived" or "abandoned". "upcoming" is a block built ahead of
+            its start date: its sessions still show in the calendar and
+            schedule checks, but it is not the plan the athlete is on.
         activity_type: Filter by activity type (e.g. "running").
 
     Returns:
@@ -126,17 +139,21 @@ async def update_plan(
     name: str | None = None,
     status: PlanStatus | None = None,
     description: str | None = None,
-    metadata: dict[str, Any] | None = None,
+    metadata: JsonTolerant[dict[str, Any] | None] = None,
     end_date: str | None = None,
 ) -> dict | list:
     """Update a training plan.
 
-    Common uses: mark as completed/abandoned, update metadata, adjust dates.
+    Common uses: mark as completed/abandoned, start an upcoming block,
+    update metadata, adjust dates.
 
     Args:
         plan_id: UUID of the plan.
         name: New plan name.
-        status: New status — "active", "completed", or "abandoned".
+        status: New status — "active", "upcoming", "completed", "archived"
+            or "abandoned". Nothing promotes a plan on its start date, so
+            starting an upcoming block is an explicit
+            update_plan(status="active").
         description: Updated description.
         metadata: Replacement metadata object (replaces entire metadata, not merged).
         end_date: New end date (YYYY-MM-DD).

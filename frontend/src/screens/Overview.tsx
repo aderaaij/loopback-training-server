@@ -217,7 +217,15 @@ function RecentWorkouts() {
 function ActivePlanCard() {
   const navigate = useNavigate()
   const { data: plans, isSuccess } = usePlans('active')
-  const plan = plans?.[0]
+  // Plans come back newest-created first, which is not the same as "the one
+  // I'm on" — a block created later can start later. Prefer a plan whose
+  // window contains today; a run and a strength plan can both be active, so
+  // this still picks one of several, just never one that hasn't begun.
+  const plan = useMemo(() => {
+    const today = todayKey()
+    const started = plans?.filter((p) => p.start_date <= today && (!p.end_date || p.end_date >= today))
+    return started?.[0] ?? plans?.[0]
+  }, [plans])
 
   if (!plan) {
     return (

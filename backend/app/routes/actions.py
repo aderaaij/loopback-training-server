@@ -61,6 +61,21 @@ def acknowledge_action(action_id: uuid.UUID, db: DbSession, user: CurrentUser):
     item = db.get(WorkoutQueue, action.workout_id)
     if item is not None and item.user_id == user.id:
         if action.action == "edit" and action.composition is not None:
+            # `title` is a column, `displayName` a key inside workout_data —
+            # writing only the blob left the list title describing the *old*
+            # session ("Easy 35 min" on a 30-minute run) with no way to tell
+            # which one was stale.
+            #
+            # Only re-sync a title that was *tracking* the composition. A title
+            # that already diverged is a deliberate label — coaches annotate
+            # them ("… (cap 140) — OPTIONAL") where the watch name stays terse —
+            # and blindly overwriting it destroys that on every edit ack. The
+            # old blob is still in hand here, so "was it tracking?" is an exact
+            # question, not a guess.
+            old_name = (item.workout_data or {}).get("displayName")
+            new_name = action.composition.get("displayName")
+            if new_name and item.title == old_name:
+                item.title = new_name
             item.workout_data = action.composition
             item.scheduled_date = _scheduled_date_from_data(action.composition) or item.scheduled_date
         elif action.action == "delete" and item.status != "completed":

@@ -10,6 +10,7 @@ from app.schemas import (
     BatchWorkoutItem,
     IntervalBlock,
     IsoDateTime,
+    JsonTolerant,
     Location,
     QueueStatus,
     WorkoutStep,
@@ -77,8 +78,8 @@ async def create_workout(
     location: Location,
     scheduled_date: IsoDateTime,
     blocks: list[IntervalBlock],
-    warmup: WorkoutStep | None = None,
-    cooldown: WorkoutStep | None = None,
+    warmup: JsonTolerant[WorkoutStep | None] = None,
+    cooldown: JsonTolerant[WorkoutStep | None] = None,
     description: str | None = None,
     plan_id: str | None = None,
 ) -> dict | list:
@@ -190,9 +191,9 @@ async def update_queued_workout(
     activity_type: ActivityType | None = None,
     location: Location | None = None,
     scheduled_date: IsoDateTime | None = None,
-    blocks: list[IntervalBlock] | None = None,
-    warmup: WorkoutStep | None = None,
-    cooldown: WorkoutStep | None = None,
+    blocks: JsonTolerant[list[IntervalBlock] | None] = None,
+    warmup: JsonTolerant[WorkoutStep | None] = None,
+    cooldown: JsonTolerant[WorkoutStep | None] = None,
     clear_warmup: bool = False,
     clear_cooldown: bool = False,
     description: str | None = None,
@@ -224,13 +225,29 @@ async def update_queued_workout(
         The updated queue item object.
     """
     try:
-        # First fetch the current item to get existing workout_data
-        current = await client.get_pending_queue()
-        existing_data = {}
+        # Read back the current item so the fields we aren't changing survive.
+        # This MUST cover every status, not just "pending": the app flips items
+        # pending -> synced within minutes, so a pending-only read found
+        # nothing, started from {}, and the PATCH below then overwrote
+        # workout_data with a blob missing displayName/activityType/location/
+        # warmup/cooldown — and nulled scheduled_date, which the backend
+        # re-derives from the blob unconditionally.
+        current = await client.list_queue(limit=200)
+        existing_data = None
         for item in current if isinstance(current, list) else []:
             if str(item.get("id")) == item_id:
                 existing_data = dict(item.get("workout_data") or {})
                 break
+
+        if existing_data is None:
+            return {
+                "error": (
+                    f"Queue item {item_id} not found in the 200 most recent items — "
+                    "refusing to update, because writing a composition without the "
+                    "current one would silently drop its unspecified fields. Check "
+                    "the id with list_queued_workouts."
+                )
+            }
 
         # Update workout_data fields
         updated = False
