@@ -242,6 +242,7 @@ All endpoints except `/api/health` and `/api/auth/login` require a `Bearer` toke
 | `PATCH` | `/api/queue/{id}/status` | Update item status (`pending` / `fetched` / `synced` / `completed` / `skipped`) |
 | `DELETE` | `/api/queue/{id}` | Delete a queue item |
 | `GET` | `/api/workouts/queue` | App-facing: get pending workouts as WorkoutKit compositions |
+| `GET` | `/api/workouts/queue/scheduled?from=` | App-facing: delivered, still-due workouts as compositions; the app restores missing ones onto a new or reinstalled phone's watch |
 | `PATCH` | `/api/workouts/queue/{id}` | App-facing: confirm install → `synced` (never downgrades completed/skipped) |
 | `DELETE` | `/api/workouts/queue/{id}` | App-facing: mark item as synced (persists the record) |
 

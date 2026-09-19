@@ -10,6 +10,33 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [0.1.14] — 2026-09-19
+
+### Added
+
+- **`GET /api/workouts/queue/scheduled?from=<ISO datetime>` — the watch
+  schedule a device should have.** Delivered queue items (`fetched`/`synced`)
+  scheduled at or after `from`, as compositions in the same shape as the
+  pending endpoint, ordered by date. `synced` is recorded per account, not per
+  device: once one install confirms an item, the pending endpoint never offers
+  it again. So a reinstall or a new phone came up with an empty watch
+  schedule, an empty calendar and no upcoming runs, while the plan still
+  listed every run. The iOS app now diffs this list against its WorkoutKit
+  schedule on every sync and re-schedules what's missing. Completed and
+  skipped items are excluded, which is what keeps an acknowledged coach delete
+  (→ `skipped`) from coming back.
+
+### Fixed
+
+- **Moving a missed run now re-dates its queue item.** Feedback with
+  `action: "move"` recorded the new date only on the feedback row, while the
+  app re-dated the run on the watch. The queue item kept the old day, so the
+  calendar, schedule validation and the coach all saw the run where it no
+  longer was, and a restore on a new phone would have skipped it as past. The
+  item's `scheduled_date` and `workout_data.scheduledDate` now follow the move
+  (normalised to whole-second UTC for the app's decoder). Dismissed moves and
+  completed or skipped items are left alone, as with skip.
+
 ## [0.1.13] — 2026-08-01
 
 ### Fixed

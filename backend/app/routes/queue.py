@@ -159,6 +159,15 @@ def delete_queue_item(item_id: uuid.UUID, db: DbSession, user: CurrentUser):
 workout_queue_router = APIRouter()
 
 
+def _as_composition(item: WorkoutQueue) -> dict:
+    """An item's workout_data with the queue item's id injected, so the app
+    can decode it as a QueuedWorkoutComposition."""
+    composition = dict(item.workout_data or {})
+    # Use the queue item's ID so the app can DELETE /api/workouts/queue/{id}
+    composition["id"] = str(item.id)
+    return composition
+
+
 @workout_queue_router.get("")
 def app_get_pending(db: DbSession, user: CurrentUser):
     """Return pending queue items as workout compositions for the iOS app.
@@ -171,14 +180,35 @@ def app_get_pending(db: DbSession, user: CurrentUser):
         .where(WorkoutQueue.user_id == user.id, WorkoutQueue.status == "pending")
         .order_by(WorkoutQueue.created_at)
     )
-    items = db.scalars(q).all()
-    results = []
-    for item in items:
-        composition = dict(item.workout_data or {})
-        # Use the queue item's ID so the app can DELETE /api/workouts/queue/{id}
-        composition["id"] = str(item.id)
-        results.append(composition)
-    return results
+    return [_as_composition(item) for item in db.scalars(q).all()]
+
+
+@workout_queue_router.get("/scheduled")
+def app_get_scheduled(
+    db: DbSession,
+    user: CurrentUser,
+    from_: datetime = Query(alias="from", description="Earliest scheduled date to include: the device's local start of today"),
+):
+    """Delivered items that are still due, as compositions (same shape as the
+    pending endpoint), ordered by scheduled date.
+
+    `synced` is per account, not per device: once one install confirms an
+    item, the pending endpoint never offers it again, so a reinstall or a new
+    phone starts with an empty watch schedule. The app diffs this list against
+    its WorkoutKit schedule and re-schedules whatever is missing, without
+    confirming anything again. Completed and skipped items are excluded, which
+    is what keeps a coach delete (acked → skipped) from coming back.
+    """
+    q = (
+        select(WorkoutQueue)
+        .where(
+            WorkoutQueue.user_id == user.id,
+            WorkoutQueue.status.in_(("fetched", "synced")),
+            WorkoutQueue.scheduled_date >= from_,
+        )
+        .order_by(WorkoutQueue.scheduled_date)
+    )
+    return [_as_composition(item) for item in db.scalars(q).all()]
 
 
 @workout_queue_router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)

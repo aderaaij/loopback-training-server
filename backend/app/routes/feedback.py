@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Query, status
 from sqlalchemy import select, update
@@ -52,6 +52,23 @@ def submit_feedback(payload: FeedbackCreate, db: DbSession, user: CurrentUser):
             )
             .values(status="skipped")
         )
+
+    # A move is the athlete re-dating the run on their watch (the app does
+    # that locally before sending this). Carry the new date onto the queue
+    # item, or every server view of the schedule keeps the old day, including
+    # /workouts/queue/scheduled, which a fresh install restores the watch from.
+    if payload.action == "move" and payload.new_date is not None and not payload.dismissed:
+        item = db.get(WorkoutQueue, payload.workout_id)
+        if item is not None and item.user_id == user.id and item.status not in ("completed", "skipped"):
+            new_date = payload.new_date if payload.new_date.tzinfo else payload.new_date.replace(tzinfo=timezone.utc)
+            item.scheduled_date = new_date
+            # The composition's own date is what the app schedules from.
+            # Whole seconds with a Z: the app's ISO 8601 decoder rejects
+            # fractional seconds.
+            item.workout_data = {
+                **(item.workout_data or {}),
+                "scheduledDate": new_date.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            }
 
     db.commit()
     return {"ok": True, "id": str(payload.id)}
