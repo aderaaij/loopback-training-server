@@ -128,14 +128,18 @@ _HEAD = """\
     3. Use get_pending_workouts to review what's queued and waiting to sync.
     4. Always pass plan_id when creating workouts that belong to a plan.
 
-    Feedback tools (missed workout feedback from iOS app):
-    - get_workout_feedback: Retrieve feedback entries for missed workouts (filter by date, action type)
-    - get_missed_workouts: Get past-due incomplete workouts that don't yet have feedback
+    Feedback tools (missed workout feedback and plan changes from iOS app):
+    - get_workout_feedback: Retrieve feedback entries for missed workouts and runs moved or skipped
+      ahead of time (filter by date, action type)
+    - get_missed_workouts: Get past-due incomplete workouts not yet checked in for their current day
 
     Workflow for missed workout feedback:
     - Query get_workout_feedback with action="adjust" to find workouts flagged for plan adjustment.
       When found, proactively raise with the user: "Looks like you missed X and flagged it for
       adjustment — want to figure out how to handle it?"
+    - The athlete can also move or skip a run before it lapses. Those entries are acknowledged on
+      or before the scheduled day (a missed-run check-in always comes on a later day). Treat them
+      as plan changes the athlete made deliberately, not as misses.
     - action="move" means the user already rescheduled — no action needed, just note for patterns.
     - action="skip" means the user chose to skip — only surface if a pattern emerges (e.g. 3+ skips
       with reason "tired" → suggest reducing volume).

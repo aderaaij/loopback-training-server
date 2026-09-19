@@ -10,6 +10,24 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [Unreleased]
+
+### Changed
+
+- **The coach can tell a plan change from a miss.** The iOS app now lets the
+  athlete move or skip a run before it lapses, through the same feedback
+  endpoint as a missed-run check-in. The MCP feedback tools and instructions
+  say how to tell the two apart: an entry acknowledged on or before its
+  scheduled day was filed ahead of time, while a missed-run check-in always
+  comes on a later day. A skip with reason `other` and a note like "Made room
+  for <run>" was cleared off the day another run moved onto.
+
+### Fixed
+
+- **`get_missed_workouts` lost a moved run for good.** Any feedback entry hid
+  the run, so one that was moved and then also went past its new day was
+  never reported. A move's entry now only settles the day the run left.
+
 ## [0.1.14] — 2026-09-19
 
 ### Added

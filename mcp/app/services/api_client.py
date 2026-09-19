@@ -1,6 +1,7 @@
 """HTTP client for Training API."""
 
 import logging
+from datetime import date, datetime
 from typing import Any
 
 import httpx
@@ -30,6 +31,20 @@ def _error_message(response: httpx.Response, method: str, path: str) -> str:
     if not detail:
         detail = response.text[:300] or response.reason_phrase
     return f"Training API returned {response.status_code} for {method} {path}: {detail}"
+
+
+def _feedback_settles(entry: dict, scheduled: date) -> bool:
+    """Whether a feedback entry settles the run the inventory has on `scheduled`.
+
+    A move re-dates the run, so its entry only settles the day the run left.
+    Once the run is past its new day unfinished it is missed again. The
+    inventory can lag a move and still show the old day, which the entry does
+    settle.
+    """
+    new_date = entry.get("newDate") or entry.get("new_date")
+    if entry.get("action") != "move" or not new_date or entry.get("dismissed"):
+        return True
+    return scheduled < datetime.fromisoformat(new_date).date()
 
 
 class TrainingClient:
@@ -274,20 +289,19 @@ class TrainingClient:
         return await self._request("GET", "/api/workouts/feedback", params=params)
 
     async def get_missed_workouts(self) -> list | dict:
-        """Get past-due incomplete workouts without feedback."""
+        """Get past-due incomplete workouts not yet checked in for their current day."""
         # Fetch inventory and feedback, compute the difference
         inventory = await self._request("GET", "/api/workouts/inventory")
         feedback = await self._request("GET", "/api/workouts/feedback", params={"limit": 100})
 
-        from datetime import date, datetime
-
         today = date.today()
-        feedback_workout_ids = set()
+        # The backend keeps one entry per workout (the latest check-in).
+        feedback_by_workout: dict[str, dict] = {}
         if isinstance(feedback, list):
             for f in feedback:
                 wid = f.get("workoutId") or f.get("workout_id")
                 if wid:
-                    feedback_workout_ids.add(str(wid))
+                    feedback_by_workout.setdefault(str(wid), f)
 
         missed = []
         if isinstance(inventory, list):
@@ -301,7 +315,8 @@ class TrainingClient:
                 if scheduled >= today:
                     continue
                 wid = str(item.get("id", ""))
-                if wid in feedback_workout_ids:
+                entry = feedback_by_workout.get(wid)
+                if entry is not None and _feedback_settles(entry, scheduled):
                     continue
                 missed.append({
                     "workoutId": wid,
