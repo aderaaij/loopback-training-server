@@ -37,6 +37,15 @@ System screen.
   (normalised to whole-second UTC for the app's decoder). Dismissed moves and
   completed or skipped items are left alone, as with skip.
 
+### Changed
+
+- **The Docker image installs exactly what `uv.lock` pins** (`uv sync --locked`)
+  instead of resolving the `pyproject.toml` ranges at build time. Every build
+  used to pick up whatever versions were newest that day. That is how fastmcp
+  4.0 broke CI with no change in this repo, and the image was exposed the same
+  way. The build now also fails if the lock has drifted from `pyproject.toml`.
+  CI installs the same way.
+
 ## [0.1.13] — 2026-08-01
 
 ### Fixed

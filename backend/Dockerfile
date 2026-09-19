@@ -27,7 +27,13 @@ RUN uv venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 COPY backend/pyproject.toml backend/uv.lock ./
-RUN uv pip install -r pyproject.toml --extra test
+# Exactly what uv.lock pins, installed into /opt/venv. Resolving the pyproject
+# ranges instead is how an upstream release (fastmcp 4.0) broke CI with no
+# change here. --locked fails the build if the lock has drifted from
+# pyproject. The app isn't installed as a package (and isn't copied yet),
+# hence --no-install-project.
+ENV UV_PROJECT_ENVIRONMENT=$VIRTUAL_ENV
+RUN uv sync --locked --no-install-project --extra test
 
 COPY backend/ .
 
