@@ -32,8 +32,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: uv venv --python 3.13
-      - run: uv pip install -r pyproject.toml --extra test
+      # From the lockfile, not the pyproject ranges: resolving fresh let an
+      # upstream release (fastmcp 4.0) break main with no change here.
+      # --locked also fails the job when uv.lock has drifted from pyproject.
+      - run: uv sync --locked --no-install-project --extra test --python 3.13
       - run: .venv/bin/python -m pytest -q
 
   mcp:
@@ -46,8 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: uv venv --python 3.13
-      - run: uv pip install -r pyproject.toml --extra test
+      - run: uv sync --locked --no-install-project --extra test --python 3.13
       - run: .venv/bin/python -m pytest -q
 
   frontend:

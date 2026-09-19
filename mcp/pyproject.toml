@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "MCP server for Training API - query workout data and manage training queue via AI assistants"
 requires-python = ">=3.13"
 dependencies = [
-    "fastmcp>=2.0.0",
+    # 4.0 moved ToolResult out of fastmcp.tools.tool (imported by app/wire.py)
+    # and failed the suite at import. Lift the cap as part of porting to 4.
+    "fastmcp>=3.1,<4",
     "httpx>=0.27.0",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
