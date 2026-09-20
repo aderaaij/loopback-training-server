@@ -6,7 +6,7 @@ from sqlalchemy import func, or_, select
 
 from app.auth import CurrentUser
 from app.database import DbSession
-from app.models.plan import Plan
+from app.models.plan import SCHEDULED_STATUSES, Plan
 from app.models.plan_note import PlanNote
 from app.models.queue import WorkoutQueue
 from app.models.user import User
@@ -176,7 +176,8 @@ def create_plan(payload: PlanCreate, db: DbSession, user: CurrentUser):
     db.add(plan)
     db.commit()
     db.refresh(plan)
-    return plan
+    return _plan_read(plan, _progress_by_plan(db, user, [plan]).get(plan.id, PlanProgress()),
+                      datetime.now(timezone.utc).date())
 
 
 @router.get("", response_model=list[PlanRead])
@@ -227,7 +228,8 @@ def update_plan(plan_id: uuid.UUID, payload: PlanUpdate, db: DbSession, user: Cu
 
     db.commit()
     db.refresh(plan)
-    return plan
+    return _plan_read(plan, _progress_by_plan(db, user, [plan]).get(plan.id, PlanProgress()),
+                      datetime.now(timezone.utc).date())
 
 
 @router.post("/{plan_id}/complete", response_model=PlanCompleteResponse)
@@ -273,7 +275,10 @@ def complete_plan(plan_id: uuid.UUID, payload: PlanCompleteRequest, db: DbSessio
         .where(
             Plan.user_id == user.id,
             Plan.id != plan.id,
-            Plan.status == "active",
+            # An already-built next block is usually "upcoming", not "active" —
+            # filtering to active returned null and nudged the athlete to go
+            # plan something that already existed.
+            Plan.status.in_(SCHEDULED_STATUSES),
             Plan.activity_type == plan.activity_type,
             or_(Plan.end_date.is_(None), Plan.end_date >= today),
         )
@@ -331,8 +336,24 @@ def get_plan_schedule(plan_id: uuid.UUID, db: DbSession, user: CurrentUser):
 def set_plan_schedule(plan_id: uuid.UUID, payload: PlanSchedule, db: DbSession, user: CurrentUser):
     """Set (replace) the plan's recurring weekly schedule. Stored on
     plan.metadata.schedule; the response includes the resolved dates and any
-    run conflicts as warnings (conflicts are surfaced, not blocked)."""
+    run conflicts as warnings (conflicts are surfaced, not blocked).
+
+    Rejects a non-strength plan: a schedule marks recurring gym days, and
+    hanging one on a running plan silently mis-types everything downstream —
+    the plan's session counts absorb the strength days, and the iOS app renders
+    it as a gym cycle purely because a schedule is present. Guarded on write
+    only; readers stay permissive so an existing plan can't 404 retroactively.
+    """
     plan = get_owned(db, Plan, plan_id, user)
+    if plan.activity_type != "strength":
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Schedules are for strength plans; this plan's activity_type is "
+                f"'{plan.activity_type}'. Create a separate activity_type='strength' "
+                f"plan for the gym cycle."
+            ),
+        )
     metadata = dict(plan.metadata_ or {})
     metadata["schedule"] = payload.model_dump(by_alias=True, mode="json", exclude_none=True)
     plan.metadata_ = metadata

@@ -7,6 +7,15 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 
+# Statuses whose schedules still describe sessions that are going to happen.
+# "upcoming" is a block built ahead of its start date: it must stay out of
+# "which plan am I on right now" answers, but its sessions are real and dated,
+# so anything reasoning over the *future timeline* — calendar, strength
+# collisions, next-plan — has to include it. Readers picking the current plan
+# use "active" alone. Getting this wrong is silent: the sessions simply don't
+# appear, and a check that finds nothing looks identical to a check that passed.
+SCHEDULED_STATUSES = ("active", "upcoming")
+
 
 class Plan(Base):
     __tablename__ = "plans"

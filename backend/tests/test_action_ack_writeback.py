@@ -119,3 +119,51 @@ def test_edit_ack_never_writes_another_users_queue_item(client_a, client_b):
     aid = action(client_a, qid)
     assert client_a.delete(f"/api/workouts/actions/{aid}").status_code == 200
     assert get_item(client_b, qid)["workout_data"] == OLD_COMP
+
+
+def test_edit_ack_syncs_the_item_title(client_a):
+    """`title` is a column, `displayName` a key inside workout_data. Writing
+    only the blob left the list title describing the *old* session — five real
+    queue rows ended up reading "Easy 35 min" for a 30-minute run, with nothing
+    marking which of the two was stale."""
+    qid = queue_item(client_a)
+    assert get_item(client_a, qid)["title"] == "Easy 30 min"
+
+    renamed = {**NEW_COMP, "displayName": "Easy 25 min"}
+    aid = action(client_a, qid, composition=renamed)
+    assert client_a.delete(f"/api/workouts/actions/{aid}").status_code == 200
+
+    item = get_item(client_a, qid)
+    assert item["title"] == "Easy 25 min"
+    assert item["workout_data"]["displayName"] == "Easy 25 min"
+
+
+def test_edit_ack_keeps_title_when_composition_has_no_display_name(client_a):
+    """No displayName means no opinion — don't blank a title that was fine."""
+    qid = queue_item(client_a)
+    stripped = {k: v for k, v in NEW_COMP.items() if k != "displayName"}
+    aid = action(client_a, qid, composition=stripped)
+    assert client_a.delete(f"/api/workouts/actions/{aid}").status_code == 200
+    assert get_item(client_a, qid)["title"] == "Easy 30 min"
+
+
+def test_edit_ack_preserves_a_deliberately_annotated_title(client_a):
+    """A title that already diverged from displayName is a deliberate label —
+    coaches annotate the list title ("(cap 140) — OPTIONAL") while the watch
+    name stays terse. Re-syncing it on every ack silently destroys that."""
+    r = client_a.post(
+        "/api/queue",
+        json={
+            "activityType": "running",
+            "title": "Easy 30 min (cap 140) — OPTIONAL",
+            "workoutData": OLD_COMP,  # displayName "Easy 30 min"
+        },
+    )
+    qid = r.json()["id"]
+
+    aid = action(client_a, qid, composition={**NEW_COMP, "displayName": "Easy 25 min"})
+    assert client_a.delete(f"/api/workouts/actions/{aid}").status_code == 200
+
+    item = get_item(client_a, qid)
+    assert item["title"] == "Easy 30 min (cap 140) — OPTIONAL"
+    assert item["workout_data"]["displayName"] == "Easy 25 min"

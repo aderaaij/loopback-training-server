@@ -13,7 +13,7 @@ from sqlalchemy import select
 
 from app.auth import CurrentUser
 from app.database import DbSession
-from app.models.plan import Plan
+from app.models.plan import SCHEDULED_STATUSES, Plan
 from app.models.queue import WorkoutQueue
 from app.models.workout import Workout
 from app.schedule_utils import resolve_sessions
@@ -45,7 +45,7 @@ def build_calendar(db: DbSession, user_id: uuid.UUID | None, date_from: date, da
         Workout.start_date >= lo,
         Workout.start_date <= hi,
     )
-    active_plans_q = select(Plan).where(Plan.status == "active")
+    active_plans_q = select(Plan).where(Plan.status.in_(SCHEDULED_STATUSES))
     if user_id is not None:
         run_q = run_q.where(WorkoutQueue.user_id == user_id)
         done_q = done_q.where(Workout.user_id == user_id)
@@ -57,7 +57,7 @@ def build_calendar(db: DbSession, user_id: uuid.UUID | None, date_from: date, da
     done_rows = db.scalars(done_q).all()
     done_dates = {w.start_date.date() for w in done_rows}
 
-    # --- Recurring strength sessions from active plan schedules ---
+    # --- Recurring strength sessions from live + upcoming plan schedules ---
     active_plans = db.scalars(active_plans_q).all()
 
     # Queued runs may reference plans that are no longer active, so the
@@ -95,7 +95,12 @@ def build_calendar(db: DbSession, user_id: uuid.UUID | None, date_from: date, da
                 "date": d.isoformat(),
                 "kind": "strength",
                 "title": s["title"],
-                "activityType": plan.activity_type,
+                # The session's own type, not the plan's. These two disagree
+                # whenever a schedule sits on a non-strength plan, and the
+                # constant is also what `completed` is matched against above —
+                # so taking it from the plan let one entry claim two
+                # vocabularies at once.
+                "activityType": STRENGTH_ACTIVITY,
                 "status": None,
                 "planId": str(plan.id),
                 "planName": plan.name,

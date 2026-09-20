@@ -11,9 +11,11 @@ notes are cheap, and missing a note is more costly than saving one too many.
 """
 
 import logging
-from typing import Any
+from typing import Annotated, Any
 
 from fastmcp import FastMCP
+
+from pydantic import Field
 
 from app.schemas import NoteKind
 from app.services.api_client import client
@@ -73,7 +75,7 @@ async def get_plan_context(
 @text_result
 async def append_plan_note(
     kind: NoteKind,
-    summary: str,
+    summary: Annotated[str, Field(max_length=280)],
     body: str | None = None,
     importance: int = 2,
     expires_at: str | None = None,
@@ -199,7 +201,7 @@ async def list_plan_notes(
 async def update_plan_note(
     note_id: str,
     kind: NoteKind | None = None,
-    summary: str | None = None,
+    summary: Annotated[str | None, Field(max_length=280)] = None,
     body: str | None = None,
     importance: int | None = None,
     expires_at: str | None = None,
