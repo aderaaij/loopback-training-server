@@ -9,6 +9,7 @@ import type {
   ChangePasswordResponse,
   FeedbackItem,
   HealthMetricsDay,
+  RuntimeConfig,
   MeResponse,
   MintedToken,
   NutritionDay,
@@ -140,6 +141,16 @@ export function useBackupNow() {
   return useMutation({
     mutationFn: () => api.post<NonNullable<SystemStatus['backup']>>('/api/admin/backup'),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['system-status'] }),
+  })
+}
+
+// Server-side runtime settings (route-map tiles etc.); static per deploy.
+export function useRuntimeConfig() {
+  return useQuery({
+    queryKey: ['runtime-config'],
+    queryFn: () => api.get<RuntimeConfig>('/api/config'),
+    staleTime: Infinity,
+    gcTime: Infinity,
   })
 }
 
