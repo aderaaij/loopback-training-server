@@ -1,4 +1,13 @@
-/** Formatting helpers. Backend units: duration seconds, distance meters, energy kcal. */
+import type { Units } from './units'
+
+/**
+ * Formatting helpers. Backend units: duration seconds, distance meters, pace
+ * seconds-per-km, weight kg, energy kcal. The API stays metric; the helpers
+ * below that take `units` convert for display only.
+ */
+
+const M_PER_MI = 1609.344
+const LB_PER_KG = 2.2046226218
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
 const DOWS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
@@ -29,19 +38,88 @@ export function fmtHoursMinutes(seconds: number | null | undefined): string {
   return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`
 }
 
-export function fmtKm(meters: number | null | undefined, digits = 2): string {
-  if (meters == null || !Number.isFinite(meters)) return '—'
-  return `${(meters / 1000).toFixed(digits)} km`
+export const distanceUnit = (units: Units) => (units === 'imperial' ? 'mi' : 'km')
+export const paceUnit = (units: Units) => (units === 'imperial' ? '/mi' : '/km')
+export const weightUnit = (units: Units) => (units === 'imperial' ? 'lb' : 'kg')
+
+/** Meters → km or mi, as a number (no unit, no rounding). */
+export function distanceValue(meters: number, units: Units): number {
+  return units === 'imperial' ? meters / M_PER_MI : meters / 1000
 }
 
-/** Pace from seconds-per-km → "6:29". */
-export function fmtPace(secPerKm: number | null | undefined): string {
+/** Kilometers (plan targets, weekly totals) → km or mi, rounded to one decimal. */
+export function kmDisplay(km: number, units: Units): number {
+  return Number(distanceValue(km * 1000, units).toFixed(1))
+}
+
+/** Short distance label for tight spots: "mi" or "k" (after the number). */
+export const distanceShortUnit = (units: Units) => (units === 'imperial' ? ' mi' : 'k')
+
+export function fmtDistance(meters: number | null | undefined, units: Units, digits = 2): string {
+  if (meters == null || !Number.isFinite(meters)) return '—'
+  return `${distanceValue(meters, units).toFixed(digits)} ${distanceUnit(units)}`
+}
+
+/** km or mi → meters; null for anything else (meters included, which callers keep as is). */
+export function toMeters(value: number, unit: string | undefined): number | null {
+  switch (unit?.trim().toLowerCase()) {
+    case 'kilometers':
+    case 'kilometres':
+    case 'km':
+      return value * 1000
+    case 'miles':
+    case 'mile':
+    case 'mi':
+      return value * M_PER_MI
+    default:
+      return null
+  }
+}
+
+/** A distance goal's value in meters; goals are authored in meters, km or miles. */
+export function goalMeters(value: number, unit: string | undefined): number {
+  return toMeters(value, unit) ?? value
+}
+
+/**
+ * Converts a free-form `{target, unit}` from a plan goal when the unit is a
+ * known distance unit; anything else comes back unchanged.
+ */
+export function convertGoalTarget(
+  target: number,
+  unit: string,
+  units: Units,
+): { target: number; unit: string } {
+  const meters = toMeters(target, unit)
+  if (meters == null) return { target, unit }
+  return { target: Number(distanceValue(meters, units).toFixed(1)), unit: distanceUnit(units) }
+}
+
+/** Kilograms → kg or lb, as a number. */
+export function weightValue(kg: number, units: Units): number {
+  return units === 'imperial' ? kg * LB_PER_KG : kg
+}
+
+export function fmtWeight(kg: number | null | undefined, units: Units, digits = 1): string {
+  if (kg == null || !Number.isFinite(kg)) return '—'
+  return `${weightValue(kg, units).toFixed(digits)} ${weightUnit(units)}`
+}
+
+/** Pace from seconds-per-km → "6:29" per km, or per mile when imperial. */
+export function fmtPace(secPerKm: number | null | undefined, units: Units): string {
   if (secPerKm == null || !Number.isFinite(secPerKm) || secPerKm <= 0) return '—'
-  const m = Math.floor(secPerKm / 60)
-  const s = Math.round(secPerKm % 60)
+  const perUnit = units === 'imperial' ? secPerKm * (M_PER_MI / 1000) : secPerKm
+  const m = Math.floor(perUnit / 60)
+  const s = Math.round(perUnit % 60)
   return s === 60 ? `${m + 1}:00` : `${m}:${String(s).padStart(2, '0')}`
 }
 
+/** Pace with its unit: "6:29 /km" or "10:26 /mi". */
+export function fmtPaceWithUnit(secPerKm: number | null | undefined, units: Units): string {
+  return `${fmtPace(secPerKm, units)} ${paceUnit(units)}`
+}
+
+/** Seconds per km — always metric, convert with `fmtPace`. */
 export function paceOf(durationSec: number | null | undefined, meters: number | null | undefined): number | null {
   if (!durationSec || !meters || meters < 100) return null
   return durationSec / (meters / 1000)

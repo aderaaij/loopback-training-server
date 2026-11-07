@@ -18,7 +18,8 @@
 import { ForkKnife } from '@phosphor-icons/react'
 import { ChartTooltip, Crosshair, GridLines, TipRow, useChartHover } from './charts'
 import { EmptyState, SectionLabel } from './ui'
-import { fmtDay, todayKey } from '../lib/format'
+import { fmtDay, fmtDistance, fmtWeight, todayKey, weightValue } from '../lib/format'
+import { useUnits } from '../lib/units'
 import type { HealthMetricsDay, NutritionDay, NutritionPeriod } from '../lib/types'
 
 const MACROS = [
@@ -335,6 +336,7 @@ function EnergyBalanceChart({
 }
 
 function ProteinPerKgChart({ periods }: { periods: NutritionPeriod[] }) {
+  const units = useUnits()
   // Every week in range, not a fixed 12: `periods` is already bounded by the
   // range toggle, and 52 dots on a line read fine where 52 bars would not.
   const withProtein = periods.filter((p) => p.protein_g_per_kg != null).slice(0, 52).reverse()
@@ -397,7 +399,7 @@ function ProteinPerKgChart({ periods }: { periods: NutritionPeriod[] }) {
                 <TipRow label="· per day" value={`${round(hovered.nutrition.protein_g)} g`} />
               )}
               {hovered.body.weight_avg != null && (
-                <TipRow label="· weight" value={`${hovered.body.weight_avg.toFixed(1)} kg`} />
+                <TipRow label="· weight" value={fmtWeight(hovered.body.weight_avg, units)} />
               )}
               <span className="tip-note">
                 {hovered.days_logged} of {hovered.days_in_period} days logged
@@ -418,6 +420,7 @@ function ProteinPerKgChart({ periods }: { periods: NutritionPeriod[] }) {
 
 /** The numbers behind the charts — and the table view the charts need. */
 function WeeklyTable({ periods }: { periods: NutritionPeriod[] }) {
+  const units = useUnits()
   const withData = periods.filter((p) => p.days_logged > 0)
   // Capped for length, but the cap is stated rather than silent — a table that
   // quietly stops at 12 rows reads as "that is all the data there is".
@@ -485,18 +488,18 @@ function WeeklyTable({ periods }: { periods: NutritionPeriod[] }) {
               <span role="cell">{macros}</span>
               <span role="cell">{p.protein_g_per_kg != null ? p.protein_g_per_kg.toFixed(2) : '—'}</span>
               <span role="cell">
-                {p.body.weight_avg != null ? `${p.body.weight_avg.toFixed(1)} kg` : '—'}
+                {fmtWeight(p.body.weight_avg, units)}
                 {change != null && (
                   <span style={{ color: change < 0 ? 'var(--green)' : 'var(--text-3)' }}>
                     {' '}
                     {change > 0 ? '+' : ''}
-                    {change.toFixed(1)}
+                    {weightValue(change, units).toFixed(1)}
                   </span>
                 )}
               </span>
               <span role="cell" className="mono-meta">
                 {p.training.workouts > 0
-                  ? `${p.training.workouts}× · ${p.training.distance_km != null ? `${p.training.distance_km.toFixed(1)} km` : '—'}`
+                  ? `${p.training.workouts}× · ${p.training.distance_km != null ? fmtDistance(p.training.distance_km * 1000, units, 1) : '—'}`
                   : '—'}
               </span>
             </div>

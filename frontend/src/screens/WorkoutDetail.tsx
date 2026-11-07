@@ -21,12 +21,19 @@ import {
 import { ConfirmDialog, ErrorNote, Loading, SectionLabel, StatusPill } from '../components/ui'
 import { activityMeta, sourceMeta } from '../lib/activity'
 import {
+  distanceUnit,
+  distanceValue,
   fmtDayYear,
+  fmtDistance,
   fmtDuration,
   fmtPace,
+  fmtPaceWithUnit,
+  goalMeters,
   fmtTime,
   paceOf,
+  paceUnit,
 } from '../lib/format'
+import { type Units, useUnits } from '../lib/units'
 import {
   useDeleteWorkout,
   useWorkout,
@@ -205,8 +212,7 @@ function plannedTotals(comp: WorkoutComposition): { seconds: number; meters: num
       const mult = g.unit === 'minutes' ? 60 : g.unit === 'hours' ? 3600 : 1
       seconds += g.value * mult * times
     } else if (g.type === 'distance') {
-      const mult = g.unit === 'kilometers' ? 1000 : g.unit === 'miles' ? 1609.34 : 1
-      meters += g.value * mult * times
+      meters += goalMeters(g.value, g.unit) * times
     }
   }
   addStep(comp.warmup)
@@ -221,10 +227,12 @@ function PlannedVsActual({
   comp,
   duration,
   distance,
+  units,
 }: {
   comp: WorkoutComposition
   duration: number | null
   distance: number | null
+  units: Units
 }) {
   const planned = plannedTotals(comp)
   const rows: { label: string; plan: string; actual: string; delta: string; color: string }[] = []
@@ -245,9 +253,9 @@ function PlannedVsActual({
     const within = Math.abs(d) / planned.meters <= 0.05
     rows.push({
       label: 'Distance',
-      plan: `${(planned.meters / 1000).toFixed(2)} km`,
-      actual: `${(distance / 1000).toFixed(2)} km`,
-      delta: within ? 'on tgt' : `${d > 0 ? '+' : '−'}${(Math.abs(d) / 1000).toFixed(2)}`,
+      plan: fmtDistance(planned.meters, units),
+      actual: fmtDistance(distance, units),
+      delta: within ? 'on tgt' : `${d > 0 ? '+' : '−'}${distanceValue(Math.abs(d), units).toFixed(2)}`,
       color: d >= 0 || within ? 'var(--green)' : 'var(--amber)',
     })
   }
@@ -329,7 +337,7 @@ function PlanLinkCard({ context }: { context: WorkoutContext }) {
   )
 }
 
-function Splits({ splits }: { splits: WorkoutSplit[] }) {
+function Splits({ splits, units }: { splits: WorkoutSplit[]; units: Units }) {
   const usable = splits.filter((s) => s.pace != null || (s.duration != null && s.distance != null))
   if (usable.length === 0) return null
   const paceOfSplit = (s: WorkoutSplit) =>
@@ -342,8 +350,9 @@ function Splits({ splits }: { splits: WorkoutSplit[] }) {
   return (
     <div className="chart-card" style={{ background: 'var(--card)', paddingBottom: 10 }}>
       <div className="chart-head">
+        {/* The server cuts splits per km. Rows stay km-indexed; only the pace converts. */}
         <SectionLabel>1 km splits</SectionLabel>
-        <span className="mono-meta">avg {fmtPace(avg)}</span>
+        <span className="mono-meta">avg {fmtPaceWithUnit(avg, units)}</span>
       </div>
       {usable.map((s, i) => {
         const pace = paceOfSplit(s)
@@ -355,7 +364,7 @@ function Splits({ splits }: { splits: WorkoutSplit[] }) {
           <div className="split-row" key={i}>
             <span className="s-km">{label}</span>
             <span className="s-pace" style={{ color: isFast ? 'var(--accent)' : 'var(--text-2)' }}>
-              {fmtPace(pace)}
+              {fmtPace(pace, units)}
             </span>
             <div className="s-track">
               <div
@@ -443,6 +452,7 @@ function CadenceChart({ samples }: { samples: TimedSample[] }) {
 
 export function WorkoutDetail() {
   const { id } = useParams()
+  const units = useUnits()
   const navigate = useNavigate()
   const { data: workout, isLoading, error } = useWorkout(id)
   const { data: splits } = useWorkoutSplits(id)
@@ -503,12 +513,12 @@ export function WorkoutDetail() {
   const stats = [
     workout.total_distance != null && {
       label: 'Distance',
-      value: (workout.total_distance / 1000).toFixed(2),
-      unit: 'km',
+      value: distanceValue(workout.total_distance, units).toFixed(2),
+      unit: distanceUnit(units),
       color: 'var(--text)',
     },
     { label: 'Duration', value: fmtDuration(workout.duration), unit: '', color: 'var(--text)' },
-    pace != null && { label: 'Avg pace', value: fmtPace(pace), unit: '/km', color: 'var(--accent)' },
+    pace != null && { label: 'Avg pace', value: fmtPace(pace, units), unit: paceUnit(units), color: 'var(--accent)' },
     avgHr != null && { label: 'Avg HR', value: String(avgHr), unit: 'bpm', color: 'var(--text)' },
     workout.total_energy_burned != null && {
       label: 'Energy',
@@ -559,12 +569,13 @@ export function WorkoutDetail() {
           comp={queueItem.workout_data}
           duration={workout.duration}
           distance={workout.total_distance}
+          units={units}
         />
       )}
 
       {((splits && splits.length > 0) || cadence.length > 0) && (
         <div className="det-grid-half">
-          {splits && splits.length > 0 && <Splits splits={splits} />}
+          {splits && splits.length > 0 && <Splits splits={splits} units={units} />}
           {cadence.length > 0 && <CadenceChart samples={cadence} />}
         </div>
       )}

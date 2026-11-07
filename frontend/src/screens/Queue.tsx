@@ -11,7 +11,7 @@ import {
   StatusPill,
 } from '../components/ui'
 import { activityMeta } from '../lib/activity'
-import { fmtDay, fmtDowDayTime, fmtDuration } from '../lib/format'
+import { distanceShortUnit, distanceValue, fmtDay, fmtDowDayTime, fmtDuration, goalMeters } from '../lib/format'
 import {
   useAcknowledgeFeedback,
   useDeleteQueueItem,
@@ -19,6 +19,7 @@ import {
   usePlans,
   useQueue,
 } from '../lib/queries'
+import { type Units, useUnits } from '../lib/units'
 import type { CompositionStep, QueueItem, WorkoutComposition } from '../lib/types'
 import '../styles/queue.css'
 
@@ -31,7 +32,7 @@ const REASON_LABELS: Record<string, string> = {
   other: 'Other',
 }
 
-function stepsOf(comp: WorkoutComposition): { label: string; flex: number }[] {
+function stepsOf(comp: WorkoutComposition, units: Units): { label: string; flex: number }[] {
   const out: { label: string; flex: number }[] = []
   const secondsOf = (s: CompositionStep | undefined) => {
     const g = s?.goal
@@ -51,8 +52,8 @@ function stepsOf(comp: WorkoutComposition): { label: string; flex: number }[] {
       return `${name} ${fmtDuration(g.unit === 'minutes' ? g.value * 60 : g.value)}`
     }
     if (g?.type === 'distance' && g.value) {
-      const km = g.unit === 'kilometers' ? g.value : g.value / 1000
-      return `${name} ${km.toFixed(km < 10 ? 1 : 0)}k`
+      const dist = distanceValue(goalMeters(g.value, g.unit), units)
+      return `${name} ${dist.toFixed(dist < 10 ? 1 : 0)}${distanceShortUnit(units)}`
     }
     return name
   }
@@ -71,6 +72,7 @@ function stepsOf(comp: WorkoutComposition): { label: string; flex: number }[] {
 }
 
 export function Queue() {
+  const units = useUnits()
   const { data: queue, isLoading, error } = useQueue(undefined, 200)
   const { data: feedback } = useFeedback()
   const { data: plans } = usePlans()
@@ -113,7 +115,7 @@ export function Queue() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {(queue ?? []).map((q) => {
               const meta = activityMeta(q.activity_type)
-              const steps = q.workout_data ? stepsOf(q.workout_data) : []
+              const steps = q.workout_data ? stepsOf(q.workout_data, units) : []
               const metaParts = [
                 q.scheduled_date ? fmtDowDayTime(q.scheduled_date) : 'unscheduled',
                 q.plan_id ? planName.get(q.plan_id) : null,

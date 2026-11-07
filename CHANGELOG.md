@@ -10,6 +10,18 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [Unreleased]
+
+### Added
+
+- **Metric / imperial display units in the dashboard.** Distance, pace and
+  weight can be shown in miles, min/mi and lb. The default follows the browser
+  locale (imperial for US, Liberia and Myanmar, metric elsewhere); override it
+  under **Settings → Units**. The choice is stored per browser. Display only:
+  the API and the iOS app are untouched and still speak metric. Splits stay
+  1 km splits (only their pace converts), and server-written warning text on
+  the plan screen is shown as written.
+
 ## [0.1.15] — 2026-09-20
 
 ### Added
