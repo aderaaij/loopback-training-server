@@ -10,6 +10,19 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [Unreleased]
+
+### Added
+
+- **Configurable route-map tiles.** CARTO now serves an "API key required"
+  watermark for keyless tile requests, which broke the route maps. Set
+  `CARTO_API_KEY` (CARTO's free key) to use the keyed dark tiles, or
+  `MAP_TILE_URL` (plus `MAP_TILE_ATTRIBUTION` / `MAP_TILE_SUBDOMAINS`) to use
+  any other provider. The dashboard reads it at runtime from the new
+  authenticated `GET /api/config`, so the published image needs no rebuild.
+  With neither set, behaviour is unchanged (and, until you add a key, still
+  watermarked).
+
 ## [0.1.15] — 2026-09-20
 
 ### Added
