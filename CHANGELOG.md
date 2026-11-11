@@ -15,12 +15,11 @@ System screen.
 ### Added
 
 - **Metric / imperial display units in the dashboard.** Distance, pace and
-  weight can be shown in miles, min/mi and lb. The default follows the browser
-  locale (imperial for US, Liberia and Myanmar, metric elsewhere); override it
-  under **Settings → Units**. The choice is stored per browser. Display only:
-  the API and the iOS app are untouched and still speak metric. Splits stay
-  1 km splits (only their pace converts), and server-written warning text on
-  the plan screen is shown as written.
+  weight can be shown in miles, min/mi and lb. Metric is the default; imperial
+  is opt-in under **Settings → Units**. The choice is stored per browser.
+  Display only: the API and the iOS app are untouched and still speak metric.
+  Splits stay 1 km splits (only their pace converts), and server-written
+  warning text on the plan screen is shown as written.
 
 ## [0.1.15] — 2026-09-20
 

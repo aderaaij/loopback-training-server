@@ -5,28 +5,15 @@ import { useSyncExternalStore } from 'react'
  * speaks metric and nothing is converted on the wire.
  *
  * Stored in localStorage under a `loopback.*` key like the auth bits in
- * api.ts. With nothing stored, the browser locale decides — imperial for the
- * few regions that still use miles and pounds day to day, metric elsewhere.
+ * api.ts. Metric is the default: imperial is opt-in, never guessed from the
+ * browser locale.
  */
 export type Units = 'metric' | 'imperial'
 
 const UNITS_KEY = 'loopback.units'
-const IMPERIAL_REGIONS = new Set(['US', 'LR', 'MM'])
-
-function localeDefault(): Units {
-  try {
-    const tag = navigator.languages?.[0] ?? navigator.language
-    const region = new Intl.Locale(tag).region
-    return region && IMPERIAL_REGIONS.has(region) ? 'imperial' : 'metric'
-  } catch {
-    return 'metric'
-  }
-}
 
 // Only set when localStorage is unavailable, so the toggle still works for the session.
 let fallback: Units | null = null
-
-const defaultUnits = localeDefault()
 
 function read(): Units {
   if (fallback) return fallback
@@ -34,9 +21,9 @@ function read(): Units {
     const stored = localStorage.getItem(UNITS_KEY)
     if (stored === 'metric' || stored === 'imperial') return stored
   } catch {
-    // storage blocked (private mode, etc.) — fall through to the locale
+    // storage blocked (private mode, etc.) — fall through to the default
   }
-  return defaultUnits
+  return 'metric'
 }
 
 let current: Units = read()
