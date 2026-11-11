@@ -7,6 +7,7 @@ import { useAuth } from '../lib/auth'
 import { clientLabel, fmtDayYear, relTime } from '../lib/format'
 import { useChangePassword, useMe, useMintToken, useRevokeToken } from '../lib/queries'
 import type { ApiTokenInfo } from '../lib/types'
+import { setUnits, useUnits } from '../lib/units'
 import '../styles/settings.css'
 
 const MIN_PASSWORD = 8
@@ -232,6 +233,7 @@ export function Settings() {
   const { user, tokenId, logout } = useAuth()
   const { data, isLoading, error } = useMe()
   const revoke = useRevokeToken()
+  const units = useUnits()
   const [revoking, setRevoking] = useState<ApiTokenInfo | null>(null)
   const [confirmLogout, setConfirmLogout] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
@@ -260,6 +262,28 @@ export function Settings() {
         <button className="btn-ghost" style={{ padding: '9px 16px', fontSize: 13 }} onClick={() => setChangingPassword(true)}>
           Change password
         </button>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <SectionLabel>Units</SectionLabel>
+      </div>
+      <div className="profile-card">
+        <div style={{ flex: 1, minWidth: 160 }}>
+          <div className="display" style={{ fontSize: 16, fontWeight: 600 }}>
+            Distance, pace &amp; weight
+          </div>
+          <div className="mono-meta" style={{ marginTop: 3 }}>
+            {units === 'imperial' ? 'miles, min/mi, lb' : 'kilometers, min/km, kg'} · this browser only
+          </div>
+        </div>
+        <div className="seg-toggle">
+          <button className={units === 'metric' ? 'on' : ''} onClick={() => setUnits('metric')}>
+            Metric
+          </button>
+          <button className={units === 'imperial' ? 'on' : ''} onClick={() => setUnits('imperial')}>
+            Imperial
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>

@@ -4,11 +4,13 @@ import { useNavigate } from 'react-router-dom'
 import { usePageHeader } from '../components/PageHeader'
 import { EmptyState, ErrorNote, Loading } from '../components/ui'
 import { ACTIVITY_FILTERS, activityMeta, effortColor, sourceMeta } from '../lib/activity'
-import { fmtDay, fmtDuration, fmtKcal, fmtKm, fmtPace } from '../lib/format'
+import { fmtDay, fmtDistance, fmtDuration, fmtKcal, fmtPaceWithUnit } from '../lib/format'
 import { useInfiniteWorkouts, useWorkoutSummary } from '../lib/queries'
+import { useUnits } from '../lib/units'
 import '../styles/workouts.css'
 
 function SummaryStrip() {
+  const units = useUnits()
   const { data } = useWorkoutSummary('month')
 
   const tiles = useMemo(() => {
@@ -25,11 +27,11 @@ function SummaryStrip() {
         : null
     return [
       { label: 'This month', value: `${count} workout${count === 1 ? '' : 's'}` },
-      { label: 'Run distance', value: run?.total_distance ? fmtKm(run.total_distance, 1) : '—' },
-      { label: 'Avg run pace', value: pace ? `${fmtPace(pace)} /km` : '—' },
+      { label: 'Run distance', value: run?.total_distance ? fmtDistance(run.total_distance, units, 1) : '—' },
+      { label: 'Avg run pace', value: pace ? fmtPaceWithUnit(pace, units) : '—' },
       { label: 'Energy', value: energy > 0 ? fmtKcal(energy) : '—' },
     ]
-  }, [data])
+  }, [data, units])
 
   if (!tiles) return null
   return (
@@ -45,6 +47,7 @@ function SummaryStrip() {
 }
 
 export function Workouts() {
+  const units = useUnits()
   const navigate = useNavigate()
   const [typeFilter, setTypeFilter] = useState<string | undefined>(undefined)
 
@@ -114,7 +117,7 @@ export function Workouts() {
                 </span>
                 <span className="wo-cell">{fmtDay(w.start_date)}</span>
                 <span className="wo-cell hide-sm">{fmtDuration(w.duration)}</span>
-                <span className="wo-cell hide-sm">{w.total_distance ? fmtKm(w.total_distance) : '—'}</span>
+                <span className="wo-cell hide-sm">{w.total_distance ? fmtDistance(w.total_distance, units) : '—'}</span>
                 <span className="wo-src hide-sm">
                   <span className="src-dot" style={{ background: src.color }} />
                   <span className="src-name">{src.name}</span>

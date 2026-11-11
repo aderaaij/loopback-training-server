@@ -21,13 +21,16 @@ import {
   fmtDowDayTime,
   fmtDuration,
   fmtHoursMinutes,
-  fmtKm,
+  fmtDistance,
   paceOf,
-  fmtPace,
+  fmtPaceWithUnit,
+  weightUnit,
+  weightValue,
   toDateKey,
   addDays,
   todayKey,
 } from '../lib/format'
+import { useUnits } from '../lib/units'
 import {
   useFeedback,
   useHealthMetrics,
@@ -50,6 +53,7 @@ function latest<T>(days: HealthMetricsDay[] | undefined, pick: (d: HealthMetrics
 }
 
 function HealthTiles() {
+  const units = useUnits()
   const start = toDateKey(addDays(new Date(), -14))
   const { data, isSuccess } = useHealthMetrics(start)
 
@@ -94,8 +98,8 @@ function HealthTiles() {
       icon: Scales,
       color: 'var(--text)',
       label: 'Weight',
-      value: weight ? weight.value.toFixed(1) : '—',
-      unit: 'kg',
+      value: weight ? weightValue(weight.value, units).toFixed(1) : '—',
+      unit: weightUnit(units),
       sub: dayLabel(weight?.date),
     },
   ]
@@ -165,6 +169,7 @@ function NextUp() {
 }
 
 function RecentWorkouts() {
+  const units = useUnits()
   const navigate = useNavigate()
   const { data, isSuccess } = useWorkouts({ limit: 5 })
 
@@ -186,8 +191,8 @@ function RecentWorkouts() {
         const pace = w.activity_type === 'running' ? paceOf(w.duration, w.total_distance) : null
         const parts = [
           fmtDay(w.start_date),
-          w.total_distance ? fmtKm(w.total_distance) : fmtDuration(w.duration),
-          pace ? `${fmtPace(pace)}/km` : null,
+          w.total_distance ? fmtDistance(w.total_distance, units) : fmtDuration(w.duration),
+          pace ? fmtPaceWithUnit(pace, units) : null,
         ].filter(Boolean)
         return (
           <button className="row-item" key={w.id} onClick={() => navigate(`/workouts/${w.id}`)}>

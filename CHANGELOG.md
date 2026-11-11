@@ -22,6 +22,12 @@ System screen.
   authenticated `GET /api/config`, so the published image needs no rebuild.
   With neither set, behaviour is unchanged (and, until you add a key, still
   watermarked).
+- **Metric / imperial display units in the dashboard.** Distance, pace and
+  weight can be shown in miles, min/mi and lb. Metric is the default; imperial
+  is opt-in under **Settings → Units**. The choice is stored per browser.
+  Display only: the API and the iOS app are untouched and still speak metric.
+  Splits stay 1 km splits (only their pace converts), and server-written
+  warning text on the plan screen is shown as written.
 
 ## [0.1.15] — 2026-09-20
 

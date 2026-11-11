@@ -13,8 +13,9 @@ import {
 } from '../components/charts'
 import { NutritionSection } from '../components/NutritionCards'
 import { EmptyState, ErrorNote, Loading, SectionLabel } from '../components/ui'
-import { addDays, fmtDay, fmtHoursMinutes, toDateKey } from '../lib/format'
+import { addDays, fmtDay, fmtHoursMinutes, fmtWeight, toDateKey } from '../lib/format'
 import { useHealthMetrics, useNutrition, useNutritionSummary } from '../lib/queries'
+import { useUnits } from '../lib/units'
 import type { HealthMetricsDay } from '../lib/types'
 import '../styles/workouts.css'
 import '../styles/health.css'
@@ -255,6 +256,9 @@ function SleepChart({ days, range }: { days: HealthMetricsDay[]; range: Range })
 }
 
 function WeightChart({ days }: { days: HealthMetricsDay[] }) {
+  const units = useUnits()
+  // The line is auto-scaled with no axis labels, so it plots kg as sent; only
+  // the readouts convert.
   const values = days.map((d) => d.weight)
   const present = values.filter((v): v is number => v != null)
   // Hover resolves in the FULL day series — that is the axis the line is drawn
@@ -275,7 +279,7 @@ function WeightChart({ days }: { days: HealthMetricsDay[] }) {
     <div className="chart-card">
       <div className="chart-head">
         <SectionLabel>Weight</SectionLabel>
-        <span className="mono-meta">{last.toFixed(1)} kg</span>
+        <span className="mono-meta">{fmtWeight(last, units)}</span>
       </div>
       <div className="chart-hover" {...hover.bind}>
         <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
@@ -294,12 +298,12 @@ function WeightChart({ days }: { days: HealthMetricsDay[] }) {
           {hovered && (
             <>
               <span className="tip-date">{fmtDay(hovered.date)}</span>
-              <TipRow color="var(--accent)" label="Weight" value={`${hovered.weight!.toFixed(1)} kg`} />
+              <TipRow color="var(--accent)" label="Weight" value={fmtWeight(hovered.weight, units)} />
               {hovered.body_fat_percentage != null && (
                 <TipRow label="Body fat" value={`${hovered.body_fat_percentage.toFixed(1)} %`} />
               )}
               {hovered.lean_body_mass != null && (
-                <TipRow label="Lean mass" value={`${hovered.lean_body_mass.toFixed(1)} kg`} />
+                <TipRow label="Lean mass" value={fmtWeight(hovered.lean_body_mass, units)} />
               )}
             </>
           )}

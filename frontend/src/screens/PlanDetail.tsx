@@ -5,9 +5,10 @@ import { usePageHeader } from '../components/PageHeader'
 import { FinishBanner } from '../components/PlanCelebration'
 import { ConflictPill, ErrorNote, Loading, SectionLabel, StatusPill } from '../components/ui'
 import { activityMeta } from '../lib/activity'
-import { fmtDay, fmtDayYear, fmtDowDayTime, todayKey } from '../lib/format'
+import { convertGoalTarget, distanceUnit, fmtDay, fmtDayYear, fmtDowDayTime, kmDisplay, todayKey } from '../lib/format'
 import { usePlan, usePlanSchedule, usePlanValidation, usePlanWorkouts } from '../lib/queries'
 import type { Plan, PlanPhase, ValidationWarning } from '../lib/types'
+import { type Units, useUnits } from '../lib/units'
 import '../styles/plans.css'
 import '../styles/screens.css'
 
@@ -20,16 +21,24 @@ const GOAL_KEYS = new Set(['type', 'target', 'unit', 'by_week', 'description', '
  * Goals/guardrails are LLM-authored with an open schema — usually strings or
  * {type, target?, unit?, by_week?, detail?|description?} objects. Compose a
  * readable line from the known keys ("Weekly volume: 20 km by week 4") and
- * never let an object hit String() ("[object Object]").
+ * never let an object hit String() ("[object Object]"). Distance targets in
+ * km or miles are shown in the user's units; other units pass through as authored.
  */
-function fmtGoal(g: unknown): string {
+function fmtGoal(g: unknown, units: Units): string {
   if (typeof g === 'string') return g
   if (typeof g !== 'object' || g == null) return String(g)
   const o = g as Record<string, unknown>
 
   const bits: string[] = []
-  const target =
-    o.target !== undefined ? String(o.target) + (typeof o.unit === 'string' ? ` ${o.unit}` : '') : null
+  const converted =
+    typeof o.target === 'number' && typeof o.unit === 'string'
+      ? convertGoalTarget(o.target, o.unit, units)
+      : null
+  const target = converted
+    ? `${converted.target} ${converted.unit}`
+    : o.target !== undefined
+      ? String(o.target) + (typeof o.unit === 'string' ? ` ${o.unit}` : '')
+      : null
   const numeric = [target, o.by_week !== undefined ? `by week ${String(o.by_week)}` : null]
     .filter(Boolean)
     .join(' ')
@@ -84,6 +93,7 @@ function currentPhaseIndex(plan: Plan, phaseCount: number): number {
 
 export function PlanDetail() {
   const { id } = useParams()
+  const units = useUnits()
   const { data: plan, isLoading, error } = usePlan(id)
   const { data: schedule } = usePlanSchedule(id)
   const { data: planWorkouts } = usePlanWorkouts(id)
@@ -121,9 +131,13 @@ export function PlanDetail() {
   const guardrails: unknown[] = Array.isArray(md.guardrails)
     ? md.guardrails
     : md.guardrails && typeof md.guardrails === 'object'
-      ? Object.entries(md.guardrails).map(
-          ([k, v]) => `${k.replace(/_/g, ' ')}: ${typeof v === 'string' || typeof v === 'number' ? v : JSON.stringify(v)}`,
-        )
+      ? Object.entries(md.guardrails).map(([k, v]) => {
+          // Keys like max_weekly_km carry their unit in the name.
+          if (typeof v === 'number' && k.endsWith('_km')) {
+            return `${k.slice(0, -3).replace(/_/g, ' ')} ${distanceUnit(units)}: ${kmDisplay(v, units)}`
+          }
+          return `${k.replace(/_/g, ' ')}: ${typeof v === 'string' || typeof v === 'number' ? v : JSON.stringify(v)}`
+        })
       : []
   const curPhase = currentPhaseIndex(plan, phases.length)
   const weekSchedule = schedule?.schedule
@@ -175,7 +189,7 @@ export function PlanDetail() {
                   <span className="g-check">
                     <Check size={12} weight="bold" />
                   </span>
-                  <span className="g-text">{fmtGoal(g)}</span>
+                  <span className="g-text">{fmtGoal(g, units)}</span>
                 </div>
               ))}
             </div>
@@ -188,7 +202,7 @@ export function PlanDetail() {
               {guardrails.map((g, i) => (
                 <div className="guardrail-row" key={i}>
                   <Warning size={16} weight="fill" color="var(--amber)" style={{ flexShrink: 0, marginTop: 1 }} />
-                  <span className="g-text">{fmtGoal(g)}</span>
+                  <span className="g-text">{fmtGoal(g, units)}</span>
                 </div>
               ))}
             </div>
@@ -240,10 +254,10 @@ export function PlanDetail() {
                     wk {fmtDay(wk.week_start)}
                   </span>
                   <span style={{ flex: 1, fontSize: 13, minWidth: 0 }}>
-                    <strong>{wk.planned_km} km</strong> planned
-                    {wk.actual_km > 0 ? ` (+${wk.actual_km} done)` : ''}
+                    <strong>{kmDisplay(wk.planned_km, units)} {distanceUnit(units)}</strong> planned
+                    {wk.actual_km > 0 ? ` (+${kmDisplay(wk.actual_km, units)} done)` : ''}
                     {wk.hard_days > 0 ? ` · ${wk.hard_days} hard` : ''}
-                    {wk.longest_km > 0 ? ` · long ${wk.longest_km} km` : ''}
+                    {wk.longest_km > 0 ? ` · long ${kmDisplay(wk.longest_km, units)} ${distanceUnit(units)}` : ''}
                     {wk.estimated ? ' ≈' : ''}
                   </span>
                   <span className="mono-meta" style={{ color: ratioColor(wk.ratio), flexShrink: 0 }}>
