@@ -1,0 +1,8 @@
+[Unit]
+Description=Reset and re-seed the public Loopback demo
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+# Adjust to where this repository is checked out.
+ExecStart=%h/loopback-demo/deploy/demo/reset.sh

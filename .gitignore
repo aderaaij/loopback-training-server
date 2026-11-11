@@ -24,3 +24,6 @@ docs/
 # OS
 .DS_Store
 Thumbs.db
+
+# Public demo secrets (tunnel token, demo passwords)
+deploy/demo/.env
