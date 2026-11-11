@@ -1,19 +1,25 @@
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef } from 'react'
+import { useRuntimeConfig } from '../lib/queries'
 import type { RoutePoint } from '../lib/types'
 
 /**
- * GPS polyline over CARTO dark tiles (external tile fetch — the one
- * network dependency this self-hosted app has, flagged in the brief).
+ * GPS polyline over map tiles (external tile fetch — the one network
+ * dependency this self-hosted app has, flagged in the brief). The tile source
+ * is runtime config from the server (`GET /api/config`); if that
+ * request fails the route is still drawn, just without a tile layer.
  */
 export function RouteMap({ points }: { points: RoutePoint[] }) {
   const elRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
+  const { data, isPending } = useRuntimeConfig()
+  const tiles = data?.map
 
   useEffect(() => {
     const el = elRef.current
-    if (!el || points.length < 2 || mapRef.current) return
+    // Wait for the config so the tile layer uses the server's URL from the start.
+    if (!el || points.length < 2 || mapRef.current || isPending) return
 
     // Cap polyline size — routes can be thousands of points.
     const step = Math.max(1, Math.floor(points.length / 600))
@@ -22,11 +28,13 @@ export function RouteMap({ points }: { points: RoutePoint[] }) {
       .map((p) => [p.latitude, p.longitude] as [number, number])
 
     const map = L.map(el, { zoomControl: false, attributionControl: true, scrollWheelZoom: false })
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19,
-      subdomains: 'abcd',
-      attribution: '&copy; OpenStreetMap &copy; CARTO',
-    }).addTo(map)
+    if (tiles) {
+      L.tileLayer(tiles.tileUrl, {
+        maxZoom: 19,
+        subdomains: tiles.subdomains,
+        attribution: tiles.attribution,
+      }).addTo(map)
+    }
 
     const accent =
       getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#FF6A3D'
@@ -55,7 +63,7 @@ export function RouteMap({ points }: { points: RoutePoint[] }) {
       map.remove()
       mapRef.current = null
     }
-  }, [points])
+  }, [points, tiles, isPending])
 
   return <div ref={elRef} className="route-map" />
 }

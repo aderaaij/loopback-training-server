@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import quote
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -43,6 +44,37 @@ class Settings(BaseSettings):
     # once, only if the admin has none yet; rotating the env var won't reset it.
     bootstrap_admin_username: str = "admin"
     bootstrap_admin_password: str | None = None
+
+    # Route-map tiles, served to the SPA at runtime (GET /api/config) so the
+    # published image needs no rebuild to change them. Precedence:
+    #   1. MAP_TILE_URL — a full Leaflet URL template ({s} {z} {x} {y} {r} and a
+    #      query string are all fine), for any provider;
+    #   2. CARTO_API_KEY — the keyed CARTO dark raster URL (CARTO has required a
+    #      free key since late 2026; without one it serves a watermark tile);
+    #   3. the original keyless CARTO URL, kept so existing installs look the
+    #      same until they set one of the above.
+    # The key is visible to the browser either way — that is how tile keys work.
+    map_tile_url: str | None = None
+    map_tile_attribution: str = "&copy; OpenStreetMap &copy; CARTO"
+    map_tile_subdomains: str = "abcd"  # only used when the template has {s}
+    carto_api_key: str | None = None
+
+    @property
+    def map_tiles(self) -> dict[str, str]:
+        if self.map_tile_url:
+            url = self.map_tile_url
+        elif self.carto_api_key:
+            url = (
+                "https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png"
+                f"?key={quote(self.carto_api_key, safe='')}"
+            )
+        else:
+            url = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+        return {
+            "tileUrl": url,
+            "attribution": self.map_tile_attribution,
+            "subdomains": self.map_tile_subdomains,
+        }
 
     @property
     def db_uri(self) -> str:

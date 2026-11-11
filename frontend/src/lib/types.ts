@@ -97,6 +97,16 @@ export interface SystemStatus {
   counts: Record<string, number>
 }
 
+export interface MapConfig {
+  tileUrl: string
+  attribution: string
+  subdomains: string
+}
+
+export interface RuntimeConfig {
+  map: MapConfig
+}
+
 // ── workouts (snake_case) ──
 
 export interface WorkoutListItem {

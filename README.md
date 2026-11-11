@@ -5,6 +5,8 @@
 
 The self-hosted backend behind **Loopback – Run Coach**, an iOS running app. It stores workout history, queues structured workouts for delivery to Apple Watch via WorkoutKit, manages training plans and daily health metrics, and serves an authenticated web dashboard for athletes and admins.
 
+**Website: [loopback.ardenlab.dev](https://loopback.ardenlab.dev/)**
+
 Built with FastAPI, PostgreSQL, SQLAlchemy, and React. Includes an optional MCP (Model Context Protocol) server so an AI assistant can act as your running coach over the same data.
 
 > **This is the server half of a two-part system — you also need the [Loopback iOS app](https://github.com/aderaaij/loopback-training-app).** The app is what feeds the server: it syncs Apple HealthKit workouts and daily health metrics to it, and installs queued workouts on Apple Watch. The server runs fine on its own (API, dashboard, MCP), but without the app nothing puts data in or gets workouts onto your watch.
@@ -168,6 +170,10 @@ Everything is configured through environment variables in the root `.env` (read 
 | `BACKUP_TIME` | `03:30` | Nightly backup time, container-local (set `TZ` to make it your local time) |
 | `BACKUP_KEEP` | `30` | How many dumps to keep — older `training-api-*.sql.gz` files in the backup dir are pruned |
 | `TZ` | UTC | Container timezone (e.g. `Europe/Lisbon`), used by `BACKUP_TIME` |
+| `CARTO_API_KEY` | *(unset)* | Route maps use CARTO's dark tiles, which now require a free API key (non-commercial, up to 5M requests/month, from CARTO); without one the map shows an "API key required" watermark. Setting this switches to the keyed CARTO URL |
+| `MAP_TILE_URL` | *(unset)* | Use any other tile provider: a [Leaflet URL template](https://leafletjs.com/reference.html#tilelayer) (`{s}` `{z}` `{x}` `{y}` `{r}` and a `?key=…` query are fine). Overrides `CARTO_API_KEY` |
+| `MAP_TILE_ATTRIBUTION` | `&copy; OpenStreetMap &copy; CARTO` | Attribution line shown on the map (HTML allowed); set it to match your provider |
+| `MAP_TILE_SUBDOMAINS` | `abcd` | Only used when `MAP_TILE_URL` contains `{s}` |
 | `IMAGE_TAG` | `latest` | Docker image tag for the app service — pin a release like `0.1` or `0.1.0` (see [Releases & upgrading](#releases--upgrading)) |
 
 Running the backend outside Docker reads `backend/config/.env` instead (template: `backend/config/.env.example`).
@@ -432,6 +438,8 @@ claude.ai's connector flow additionally expects OAuth, which this bearer-token
 setup doesn't advertise.
 
 ## Development
+
+Want to contribute? See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ```bash
 make up       # Start containers

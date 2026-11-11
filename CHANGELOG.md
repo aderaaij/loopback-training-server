@@ -14,6 +14,14 @@ System screen.
 
 ### Added
 
+- **Configurable route-map tiles.** CARTO now serves an "API key required"
+  watermark for keyless tile requests, which broke the route maps. Set
+  `CARTO_API_KEY` (CARTO's free key) to use the keyed dark tiles, or
+  `MAP_TILE_URL` (plus `MAP_TILE_ATTRIBUTION` / `MAP_TILE_SUBDOMAINS`) to use
+  any other provider. The dashboard reads it at runtime from the new
+  authenticated `GET /api/config`, so the published image needs no rebuild.
+  With neither set, behaviour is unchanged (and, until you add a key, still
+  watermarked).
 - **Metric / imperial display units in the dashboard.** Distance, pace and
   weight can be shown in miles, min/mi and lb. Metric is the default; imperial
   is opt-in under **Settings → Units**. The choice is stored per browser.

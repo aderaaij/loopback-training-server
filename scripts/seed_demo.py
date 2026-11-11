@@ -502,8 +502,8 @@ def main() -> None:
         "metadata": {
             "goals": [{"type": "weekly_volume", "target": 26, "unit": "km", "by_week": 6}],
             "phases": [
-                {"name": "Base", "weeks": "1-4", "focus": "easy aerobic volume"},
-                {"name": "Consolidate", "weeks": "5-6", "focus": "hold volume, add strides"},
+                {"name": "Base", "weeks": [1, 2, 3, 4], "notes": "Easy aerobic volume"},
+                {"name": "Consolidate", "weeks": [5, 6], "notes": "Hold volume, add strides"},
             ],
             "completion": {
                 "completed_on": (plan_start - timedelta(weeks=3)).isoformat(),
@@ -515,7 +515,10 @@ def main() -> None:
 
     strength_plan = api.req("POST", "/api/plans", {
         "name": "Strength × run support",
-        "activityType": "traditionalStrength",
+        # The plan type is "strength" (what the schedule endpoint requires since
+        # 0.1.15); the recorded sessions below keep HealthKit's own
+        # "traditionalStrength" workout type.
+        "activityType": "strength",
         "status": "active",
         "startDate": (monday0 - timedelta(weeks=8)).isoformat(),
         "endDate": (monday0 + timedelta(weeks=4) - timedelta(days=1)).isoformat(),
@@ -547,14 +550,22 @@ def main() -> None:
                 {"type": "race", "distance": "10k", "target_time": "0:55:00", "race_date": plan_end.isoformat()},
                 {"type": "weekly_volume", "target": 31, "unit": "km", "by_week": 6},
             ],
-            "guardrails": {"max_sessions_per_week": 5, "max_weekly_km": 34},
-            "phases": [
-                {"name": "Build", "weeks": "1-3", "focus": "volume + 10K-effort intervals"},
-                {"name": "Absorb", "weeks": "4", "focus": "down week"},
-                {"name": "Peak", "weeks": "5-7", "focus": "race-specific tempo"},
-                {"name": "Taper", "weeks": "8", "focus": "freshness"},
+            # Metadata is free-form JSON on the server, but the iOS app decodes it
+            # strictly and drops a plan it cannot parse — so the demo sticks to the
+            # shapes the app models: guardrails as sentences, phase weeks as lists,
+            # prose under "background".
+            "guardrails": [
+                "No more than 5 sessions a week",
+                "Weekly volume stays under 34 km",
+                "Miss a run: don't make it up, move on",
             ],
-            "athlete_context": "Second structured block after a spring of base building. Morning runner, Lisbon riverfront.",
+            "phases": [
+                {"name": "Build", "weeks": [1, 2, 3], "notes": "Volume + 10K-effort intervals"},
+                {"name": "Absorb", "weeks": [4], "notes": "Down week"},
+                {"name": "Peak", "weeks": [5, 6, 7], "notes": "Race-specific tempo"},
+                {"name": "Taper", "weeks": [8], "notes": "Freshness"},
+            ],
+            "background": "Second structured block after a spring of base building. Morning runner, Lisbon riverfront.",
         },
     })
     plan_id = plan["id"]

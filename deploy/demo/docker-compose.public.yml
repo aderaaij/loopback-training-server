@@ -1,0 +1,36 @@
+# Public exposure for the demo stack — layered on top of docker-compose.demo.yml.
+#
+# Adds a Cloudflare Tunnel so the demo is reachable over HTTPS at a real
+# hostname without opening a port on the host, and replaces the two things in
+# the base file that are only safe on localhost: the published port and the
+# well-known admin password.
+#
+# Run it through deploy/demo/reset.sh, which supplies the env file and seeds
+# the athlete. See deploy/demo/README.md.
+
+services:
+  db:
+    restart: unless-stopped
+
+  app:
+    # Loopback only: the tunnel reaches the app over the compose network, and
+    # the reset script seeds through this port. Nothing listens on the LAN.
+    ports: !override
+      - "127.0.0.1:${DEMO_API_PORT:-8011}:8001"
+    environment:
+      # The dashboard is served on the same origin as the API, so the base
+      # file's admin/demo-admin would be a public admin login.
+      - BOOTSTRAP_ADMIN_PASSWORD=${DEMO_ADMIN_PASSWORD:?set DEMO_ADMIN_PASSWORD in deploy/demo/.env}
+    restart: unless-stopped
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: tunnel__training-api-demo
+    command: tunnel --no-autoupdate run
+    environment:
+      # Remotely-managed tunnel: the public hostname → http://app:8001 mapping
+      # lives in the Cloudflare dashboard, only the token lives here.
+      - TUNNEL_TOKEN=${DEMO_TUNNEL_TOKEN:?set DEMO_TUNNEL_TOKEN in deploy/demo/.env}
+    depends_on:
+      - app
+    restart: unless-stopped

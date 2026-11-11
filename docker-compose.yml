@@ -54,6 +54,12 @@ services:
       - BACKUP_TIME
       - BACKUP_KEEP
       - TZ
+      # Route-map tiles (CARTO needs a free key now — see README
+      # "Configuration"). Pass through only when set in the root .env.
+      - CARTO_API_KEY
+      - MAP_TILE_URL
+      - MAP_TILE_ATTRIBUTION
+      - MAP_TILE_SUBDOMAINS
       # First-run admin account (password applied only while the admin has
       # none — see README "Quick Start"). Set these in the root .env: they pass
       # through from there, and when unset the variables are absent in the

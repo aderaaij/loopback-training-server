@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly reset of the public Loopback demo
+
+[Timer]
+# 09:00 UTC is the middle of the night on the US west coast, where app review
+# works from. The demo is down for about a minute.
+OnCalendar=*-*-* 09:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
