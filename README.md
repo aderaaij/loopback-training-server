@@ -439,6 +439,8 @@ setup doesn't advertise.
 
 ## Development
 
+Want to contribute? See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ```bash
 make up       # Start containers
 make down     # Stop containers
