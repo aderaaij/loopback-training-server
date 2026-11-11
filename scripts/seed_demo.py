@@ -515,7 +515,10 @@ def main() -> None:
 
     strength_plan = api.req("POST", "/api/plans", {
         "name": "Strength × run support",
-        "activityType": "traditionalStrength",
+        # The plan type is "strength" (what the schedule endpoint requires since
+        # 0.1.15); the recorded sessions below keep HealthKit's own
+        # "traditionalStrength" workout type.
+        "activityType": "strength",
         "status": "active",
         "startDate": (monday0 - timedelta(weeks=8)).isoformat(),
         "endDate": (monday0 + timedelta(weeks=4) - timedelta(days=1)).isoformat(),
