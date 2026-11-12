@@ -156,6 +156,9 @@ _TAIL = """\
     Speed alerts use metersPerSecond (e.g., 4:00/km pace ≈ 4.17 m/s, 5:00/km ≈ 3.33 m/s).
     The data is always metric, but the athlete may read miles: `get_plan_context` returns
     their `units` and a `units_hint`. Follow the hint when talking and when authoring workouts.
+    You cannot change that setting. The athlete can, under Settings in the app (Training → Units)
+    or in the dashboard (Settings → Units), and the change reaches you in the next conversation.
+    If they ask to switch units, tell them where; do not promise to remember it for them.
     """
 
 
