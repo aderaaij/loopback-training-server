@@ -9,7 +9,7 @@ The self-hosted backend behind **Loopback – Run Coach**, an iOS running app. I
 
 Built with FastAPI, PostgreSQL, SQLAlchemy, and React. Includes an optional MCP (Model Context Protocol) server so an AI assistant can act as your running coach over the same data.
 
-> **This is the server half of a two-part system — you also need the [Loopback iOS app](https://github.com/aderaaij/loopback-training-app).** The app is what feeds the server: it syncs Apple HealthKit workouts and daily health metrics to it, and installs queued workouts on Apple Watch. The server runs fine on its own (API, dashboard, MCP), but without the app nothing puts data in or gets workouts onto your watch.
+> **This is the server half of a two-part system — you also need the [Loopback iOS app](https://github.com/aderaaij/loopback-training-app).** The app is what feeds the server: it syncs Apple HealthKit workouts and daily health metrics to it, and installs queued workouts on Apple Watch. The server runs fine on its own (API, dashboard, MCP), but without the app nothing puts data in or gets workouts onto your watch. The app installs from the **[public TestFlight beta](https://testflight.apple.com/join/fV73tucs)** (iOS 26), or builds from source.
 
 > **Naming note:** this is the companion server for the Loopback running app — no relation to the [LoopBack](https://loopback.io) Node.js framework or Rogue Amoeba's Loopback audio tool. The technical name used throughout the codebase (packages, containers, DB) is `training-api`.
 
@@ -76,7 +76,7 @@ One instance serves a household: a handful of accounts, all data scoped per user
 
 1. As `admin`, open **Users** and create an account for each athlete (role `user`).
 2. Each athlete signs into the **dashboard** with their username + password.
-3. In the **[iOS app](https://github.com/aderaaij/loopback-training-app)**, each athlete enters the server URL plus their username + password; the app logs in and stores a per-device token.
+3. In the **[iOS app](https://github.com/aderaaij/loopback-training-app)** ([TestFlight beta](https://testflight.apple.com/join/fV73tucs)), each athlete enters the server URL plus their username + password; the app logs in and stores a per-device token.
 4. Optional AI-coach access: each athlete mints a token in the dashboard (**Settings → Create token**) for their own MCP client (see [MCP Server](#mcp-server-optional)).
 
 Passwords, per-device tokens (revoke one stolen device without touching the rest), and deactivation are all managed in the dashboard. The same operations exist as a CLI fallback:
