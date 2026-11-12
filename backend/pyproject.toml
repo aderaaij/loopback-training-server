@@ -12,10 +12,21 @@ dependencies = [
     "uvicorn>=0.34",
     "argon2-cffi>=23.1",
     "slowapi>=0.1.9",
+    # The coach MCP, mounted in-process at /mcp (app/mcp_mount.py).
+    "training-mcp",
 ]
 
 [project.optional-dependencies]
 test = ["pytest>=8"]
+
+[tool.uv]
+# The image runs the MCP from THIS lock, but its test suite runs from
+# mcp/uv.lock. Hold fastmcp and the MCP SDK to the versions that suite tested; bump both
+# together.
+constraint-dependencies = ["fastmcp==3.1.1", "mcp==1.26.0"]
+
+[tool.uv.sources]
+training-mcp = { path = "../mcp" }
 
 [build-system]
 requires = ["hatchling"]

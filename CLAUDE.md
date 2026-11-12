@@ -34,8 +34,8 @@ frontend/
     screens/             # one file per screen (Overview, Calendar, Workouts, Plans, Notes, Health, Queue, Settings, Users)
     styles/              # global design tokens + per-screen CSS
 mcp/
-  app/
-    main.py              # FastMCP server entry point
+  training_mcp/          # Python package (NOT `app` — see MCP Server below)
+    main.py              # FastMCP server; standalone entry point
     config.py            # MCP settings
     coaching/            # Coaching playbook content (core.md + goals/*.md) + loader
     tools/               # MCP tool routers (workouts, queue, actions, feedback, health, plans, coaching)
@@ -215,7 +215,7 @@ Models live in `backend/app/models/`. Key tables:
   equals the default is indistinguishable from one who never reported. The admin
   Users screen flags "not reported" in amber for the same reason.
 - **Two layers, and only together do they enforce anything.** The MCP drops
-  unshared tools from `tools/list` (`mcp/app/{consent,middleware}.py`) — filtering
+  unshared tools from `tools/list` (`mcp/training_mcp/{consent,middleware}.py`) — filtering
   the *advertised list*, never refusing an advertised call, because a tool that
   errors makes the coach apologise and tell the athlete to go enable tracking,
   which is the nagging the app's surfaces exist to avoid. The backend then filters
@@ -239,7 +239,7 @@ Models live in `backend/app/models/`. Key tables:
   and is not (the inner handler has already responded by the time middleware sees
   the result). So domain guidance lives on the tool descriptions, which ship only
   when their tool does. Anything domain-specific added back to
-  `mcp/app/instructions.py` is read by every athlete regardless of what they
+  `mcp/training_mcp/instructions.py` is read by every athlete regardless of what they
   share — `mcp/tests/test_consent_filter.py` asserts it stays out. Related known
   wart: those instructions embed `date.today()` evaluated at process start, so a
   long-lived server keeps telling new clients the date it booted on.
@@ -258,7 +258,7 @@ Models live in `backend/app/models/`. Key tables:
 - `GET/PUT/DELETE /api/plans/{id}/schedule` — read/set/clear a plan's recurring cadence; the response resolves it to concrete dated `sessions` and flags any that **collide with a queued run** (`warnings`, surfaced not blocked). Weekday keys validated against `mon..sun`.
 - `GET /api/schedule/calendar?from=&to=` — unified timeline merging scheduled runs (queue) + strength sessions (active plan schedules), each with a `conflict` flag. Shared by the dashboard **Schedule** page and the MCP.
 - Expansion/conflict logic is in `backend/app/schedule_utils.py` (pure) + `routes/schedule.py`.
-- MCP tools (`mcp/app/tools/plans.py`): `set_strength_schedule`, `get_plan_schedule`, `clear_plan_schedule`, `get_training_calendar`. Workflow: pull routines from `hevy-mcp` → `get_training_calendar` to see runs → `set_strength_schedule` placing sessions on free days.
+- MCP tools (`mcp/training_mcp/tools/plans.py`): `set_strength_schedule`, `get_plan_schedule`, `clear_plan_schedule`, `get_training_calendar`. Workflow: pull routines from `hevy-mcp` → `get_training_calendar` to see runs → `set_strength_schedule` placing sessions on free days.
 
 When adding/changing models, create a migration with `make create_migration m="description"`. Migrations auto-run on container startup.
 
@@ -266,12 +266,35 @@ When adding/changing models, create a migration with `make create_migration m="d
 
 The MCP server (`mcp/`) exposes training data to Claude via FastMCP. It talks to the backend API over HTTP.
 
-- Runs as a separate systemd service (`training-mcp`) on port **8590** — native FastMCP streamable HTTP at `/mcp` since 2026-07-17 (`MCP_TRANSPORT=http` in the unit, no supergateway; stdio remains the default transport for direct clients). Rollback: `training-mcp.service.pre-native.bak`
-- Config: `~/.config/systemd/user/training-mcp.service`
-- Env: `mcp/config/.env` (needs `TRAINING_API_URL` and `TRAINING_API_KEY`)
+- **Built into the backend image, served at `/mcp` on :8001** (since 0.1.17).
+  `backend/app/mcp_mount.py` builds `mcp.http_app(path="/")` and `MCPDispatch`, an ASGI
+  wrapper added to the FastAPI app, routes `/mcp` and `/mcp/` to it; `main.py`'s lifespan
+  enters the MCP's own lifespan (its session manager only runs there, and only once per
+  process — hence the module-scoped fixture in `backend/tests/test_mcp_mount.py`).
+  `MCP_ENABLED=false` turns it off. Things worth not re-deriving:
+  - **Not `app.mount("/mcp", …)`**: a Starlette mount matches only `/mcp/…`, so a POST to
+    the bare `/mcp` falls to the GET-only SPA catch-all and returns 405 — the same
+    trailing-slash trap described under data consent.
+  - **The package is `training_mcp`, not `app`**, because it is imported into the backend
+    process, which already owns `app`. For the same reason nothing in it may do
+    process-wide setup at import (logging config and the missing-key warning moved into
+    `main()`).
+  - **It is a path dependency of the backend** (`[tool.uv.sources]` → `../mcp`), so the
+    image runs it from `backend/uv.lock` while its tests run from `mcp/uv.lock`.
+    `constraint-dependencies` in `backend/pyproject.toml` holds `fastmcp` and `mcp` to the
+    tested versions (unconstrained, the resolver also dragged starlette to 1.x under the
+    API). Bump both locks together.
+  - **Still HTTP, still the caller's token**: embedded, the MCP calls the API over loopback
+    (`TRAINING_API_URL` default `http://localhost:8001`) rather than touching the DB, so
+    auth, user scoping and the `X-Consent-Scope` filtering are one code path either way.
+  - The door checks only that a bearer token is *present* (401 otherwise); the API verifies
+    it on every call. A bogus token can therefore open a session and list tool schemas
+    (the consent lookup fails open to "advertise all"), but every data call fails.
+- Standalone mode remains (`cd mcp && uv run start`): stdio by default, `MCP_TRANSPORT=http`
+  for its own port (8590). Env: `mcp/config/.env` (`TRAINING_API_URL`, `TRAINING_API_KEY`).
 - **Coaching playbook:** `get_coaching_playbook(goal?, experience?)` serves the running-coach
   methodology any LLM client should follow before creating/revising a plan (server
-  `instructions` direct models to call it). Content is plain markdown in `mcp/app/coaching/`:
+  `instructions` direct models to call it). Content is plain markdown in `mcp/training_mcp/coaching/`:
   `core.md` (evidence-based principles + API mapping, always included) + `goals/<goal>.md`
   modules (`first_5k` = C25K walk/run, `5k`, `10k`, `half_marathon`, `marathon`,
   `general_fitness`). Goal files may have top-level `## Beginner/Intermediate/Advanced`
@@ -280,7 +303,7 @@ The MCP server (`mcp/`) exposes training data to Claude via FastMCP. It talks to
   Served as a tool (not an MCP prompt) deliberately: tools are the one primitive every MCP
   client supports, and content updates ship server-side with no client changes.
 - **Token passthrough (multi-user):** an `Authorization` header on the incoming MCP request is forwarded to the backend as-is, so each caller acts as their own Training API user; any presented header disables the fallback (a bad token fails, never silently downgrades). With no header, `TRAINING_API_KEY` (an athlete token, not admin) is the fallback — set `REQUIRE_AUTH_HEADER=true` in the unit/env to disable the fallback once multiple users have network access to :8590. Note: FastMCP's `get_http_headers()` strips `authorization` unless included explicitly (`include={"authorization"}`).
-- **Text-only tool results (2026-07-23):** every tool is wrapped with `@text_result` (`mcp/app/wire.py`) so results ship as one compact-JSON text block — no `structuredContent`, which FastMCP otherwise duplicates the entire payload into (and which made empty lists render as `{"result": []}`). New tools must add the decorator **under** `@router.tool`. LLM-facing payload trimming lives server-side in `backend/app/workout_summary.py`: `strip_samples` (sample arrays → `samplesSummary`, segment-event pruning, float rounding) plus `downsample_timed`/`round_floats` used by the heartrate/splits endpoints; `get_training_summary` and `get_workout_heartrate` are bounded by default (`limit=52` rows / `max_samples=500`).
+- **Text-only tool results (2026-07-23):** every tool is wrapped with `@text_result` (`mcp/training_mcp/wire.py`) so results ship as one compact-JSON text block — no `structuredContent`, which FastMCP otherwise duplicates the entire payload into (and which made empty lists render as `{"result": []}`). New tools must add the decorator **under** `@router.tool`. LLM-facing payload trimming lives server-side in `backend/app/workout_summary.py`: `strip_samples` (sample arrays → `samplesSummary`, segment-event pruning, float rounding) plus `downsample_timed`/`round_floats` used by the heartrate/splits endpoints; `get_training_summary` and `get_workout_heartrate` are bounded by default (`limit=52` rows / `max_samples=500`).
 
 ## Deployment
 

@@ -10,6 +10,29 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [Unreleased]
+
+### Added
+
+- **The coach MCP is built into the server.** It is served at `/mcp` on the
+  same port as the API and dashboard, from the same container, with no
+  configuration: wherever the dashboard is reachable, the coach is too. Each
+  caller still authenticates with their own token (`Authorization: Bearer`),
+  and a request without one gets a 401. `MCP_ENABLED=false` turns the endpoint
+  off.
+
+### Changed
+
+- **Running the MCP as a separate process is now optional** — only needed for
+  a stdio client that launches it, or to run it on a different machine. If you
+  run one today (default port 8590), point your clients at
+  `http://<server>:8001/mcp` and retire it; nothing else changes.
+- The MCP's Python package is renamed `app` → `training_mcp` so it can share a
+  process with the backend. `uv run start` is unaffected. A standalone
+  install that runs `.venv/bin/start` directly needs one `uv sync` after
+  pulling (the old script still points at `app.main`), and anything calling
+  the module path (`python -m app.main`) needs `training_mcp.main`.
+
 ## [0.1.16] — 2026-11-12
 
 ### Added

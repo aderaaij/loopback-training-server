@@ -5,9 +5,9 @@ from typing import Any
 
 from fastmcp import FastMCP
 
-from app.schemas import JsonTolerant, PlanStatus, WeeklyDays
-from app.services.api_client import client
-from app.wire import text_result
+from training_mcp.schemas import JsonTolerant, PlanStatus, WeeklyDays
+from training_mcp.services.api_client import client
+from training_mcp.wire import text_result
 
 logger = logging.getLogger(__name__)
 

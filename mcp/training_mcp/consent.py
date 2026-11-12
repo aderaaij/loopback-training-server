@@ -20,7 +20,7 @@ import hashlib
 import logging
 import time
 
-from app.services.api_client import client
+from training_mcp.services.api_client import client
 
 logger = logging.getLogger(__name__)
 

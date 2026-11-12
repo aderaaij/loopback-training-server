@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "MCP server for Training API - query workout data and manage training queue via AI assistants"
 requires-python = ">=3.13"
 dependencies = [
-    # 4.0 moved ToolResult out of fastmcp.tools.tool (imported by app/wire.py)
+    # 4.0 moved ToolResult out of fastmcp.tools.tool (imported by training_mcp/wire.py)
     # and failed the suite at import. Lift the cap as part of porting to 4.
     "fastmcp>=3.1,<4",
     "httpx>=0.27.0",
@@ -16,7 +16,7 @@ dependencies = [
 test = ["pytest>=8", "pytest-asyncio>=1"]
 
 [project.scripts]
-start = "app.main:main"
+start = "training_mcp.main:main"
 
 [tool.pytest.ini_options]
 # The suite drives a real MCP session over FastMCP's in-memory transport.
@@ -27,4 +27,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["app"]
+packages = ["training_mcp"]

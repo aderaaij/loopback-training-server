@@ -5,7 +5,7 @@ import uuid
 
 from fastmcp import FastMCP
 
-from app.schemas import (
+from training_mcp.schemas import (
     ActivityType,
     BatchWorkoutItem,
     IntervalBlock,
@@ -16,8 +16,8 @@ from app.schemas import (
     WorkoutStep,
     dump_step,
 )
-from app.services.api_client import client
-from app.wire import text_result
+from training_mcp.services.api_client import client
+from training_mcp.wire import text_result
 
 logger = logging.getLogger(__name__)
 

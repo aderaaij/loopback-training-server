@@ -9,7 +9,7 @@ the inner handler has already responded.)
 That constraint decides where domain guidance lives. Health and nutrition
 guidance used to sit here *and*, in near-identical words, on the tools
 themselves. A tool description ships only when the tool does, and the tool list
-IS filtered per session (app/middleware.py) — so the tools are the honest home
+IS filtered per session (training_mcp/middleware.py) — so the tools are the honest home
 for it: an athlete who doesn't share nutrition has no nutrition tool, and now
 reads nothing about nutrition either. What stays here is what holds for every
 athlete: training, continuity, plans, the queue, units.

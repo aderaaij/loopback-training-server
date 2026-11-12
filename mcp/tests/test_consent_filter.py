@@ -11,10 +11,10 @@ HTTP call to the backend (whose own filtering has its own suite).
 
 import pytest
 
-from app import consent as consent_module
-from app import middleware as middleware_module
-from app.consent import ACTIVITY, ALL_DOMAINS, NUTRITION, TRAINING
-from app.main import mcp
+from training_mcp import consent as consent_module
+from training_mcp import middleware as middleware_module
+from training_mcp.consent import ACTIVITY, ALL_DOMAINS, NUTRITION, TRAINING
+from training_mcp.main import mcp
 
 pytestmark = pytest.mark.anyio
 
@@ -109,7 +109,7 @@ async def test_instructions_describe_no_health_tooling(shares):
     every athlete regardless of what they share. Domain guidance therefore
     belongs on the tools (which ARE filtered) — if it creeps back in here, an
     athlete who shares nothing still gets told about nutrition tooling."""
-    from app.instructions import build
+    from training_mcp.instructions import build
 
     text = build("2026-07-31")
     for absent in ("Health metrics tools", "Nutrition tools", "get_nutrition",
@@ -133,7 +133,7 @@ async def test_domain_guidance_survives_on_the_tools(shares):
 def test_tool_map_survives_a_mount_prefix():
     """Names are matched on the suffix too, so mounting a router under a
     prefix later can't quietly turn the filter into a no-op."""
-    from app.consent import tool_is_shared
+    from training_mcp.consent import tool_is_shared
 
     for name in (METRIC_TOOL, f"health_{METRIC_TOOL}"):
         assert tool_is_shared(name, frozenset({ACTIVITY}))

@@ -11,8 +11,8 @@ from typing import Literal
 
 from fastmcp import FastMCP
 
-from app.coaching import load_playbook
-from app.wire import text_result
+from training_mcp.coaching import load_playbook
+from training_mcp.wire import text_result
 
 logger = logging.getLogger(__name__)
 
