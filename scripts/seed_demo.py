@@ -266,8 +266,24 @@ def make_simple(day: date, start_hm: tuple[int, int], activity: str, minutes: fl
 # ── compositions (queued sessions) ───────────────────────────────────────────
 
 
-def _step(purpose: str, goal_type: str, unit: str, value: float) -> dict:
-    return {"purpose": purpose, "goal": {"type": goal_type, "unit": unit, "value": value}}
+def _step(purpose: str, goal_type: str, unit: str, value: float, pace: tuple[str, str] | None = None) -> dict:
+    step = {"purpose": purpose, "goal": {"type": goal_type, "unit": unit, "value": value}}
+    if pace:
+        step["alert"] = _pace_alert(*pace)
+    return step
+
+
+def _pace_alert(fast: str, slow: str) -> dict:
+    """A pace window ("4:55", "5:10" per km) as the speed alert the watch takes.
+
+    Paced steps are what an athlete actually gets from a coach, and without
+    them the demo never shows a pace target on a session.
+    """
+    def mps(pace: str) -> float:
+        minutes, seconds = pace.split(":")
+        return round(1000 / (int(minutes) * 60 + int(seconds)), 2)
+
+    return {"type": "speed", "unit": "metersPerSecond", "min": mps(slow), "max": mps(fast)}
 
 
 def composition(kind: str, dist_km: float, sched: datetime, reps: int = 6) -> tuple[str, str, dict]:
@@ -275,12 +291,12 @@ def composition(kind: str, dist_km: float, sched: datetime, reps: int = 6) -> tu
     if kind == "intervals":
         title = f"{reps} × 3:00 @ 10K effort"
         desc = "Float the recoveries — effort, not pace, on the reps."
-        blocks = [{"steps": [_step("work", "time", "seconds", 180), _step("rest", "time", "seconds", 90)], "iterations": reps}]
+        blocks = [{"steps": [_step("work", "time", "seconds", 180, pace=("4:55", "5:10")), _step("rest", "time", "seconds", 90)], "iterations": reps}]
         warmup, cooldown = _step("warmup", "time", "seconds", 900), _step("cooldown", "time", "seconds", 600)
     elif kind == "tempo":
         title = f"Tempo {km}k @ threshold"
         desc = "Comfortably hard — you should be able to say short sentences."
-        blocks = [{"steps": [_step("work", "distance", "meters", dist_km * 1000)], "iterations": 1}]
+        blocks = [{"steps": [_step("work", "distance", "meters", dist_km * 1000, pace=("5:20", "5:35"))], "iterations": 1}]
         warmup, cooldown = _step("warmup", "time", "seconds", 900), _step("cooldown", "time", "seconds", 600)
     elif kind == "long":
         title = f"Long run {km}k"
