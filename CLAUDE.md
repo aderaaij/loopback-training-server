@@ -318,4 +318,23 @@ docker compose up -d --build     # Deploy changes
 docker compose logs -f backend   # Check logs
 ```
 
+**Built-in HTTPS (`deploy/https/caddy.yml`, unreleased after 0.1.17):** an add-on compose
+file enabled with `COMPOSE_FILE=docker-compose.yml:deploy/https/caddy.yml` + `DOMAIN=` in
+`.env` (override files with `!override`, same pattern as `deploy/demo`; not compose
+profiles, because a profile cannot change the `app` service's ports). Things worth not
+re-deriving:
+- **Caddy does NOT share the app's network namespace** (`network_mode: service:app`),
+  tempting as it is (the API would see a loopback peer and trust `X-Forwarded-For` with no
+  config). Tested: when the app container restarts on its own — crash, `docker restart` —
+  the sidecar is left in a dead namespace and the site stays down until someone restarts
+  the sidecar; a plain `docker compose up -d` does not fix it. Any future sidecar
+  (Tailscale, cloudflared) has the same problem.
+- **Client addresses come from uvicorn's proxy-header handling, not app code**:
+  `client_ip()` and slowapi both read `request.client.host`, which uvicorn rewrites from
+  `X-Forwarded-For` only for peers in `FORWARDED_ALLOW_IPS` (default: loopback only). The
+  Caddy file sets `*`, which is sound only because the same file makes port 8001
+  loopback-only; the two settings must stay together.
+- A Tailscale Funnel add-on file was drafted but not shipped: it could not be tested
+  without a tailnet auth key.
+
 This deployment is exposed via Tailscale Funnel (HTTPS on :8443, proxying the API on :8001) for iPhone app access.

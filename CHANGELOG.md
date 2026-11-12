@@ -10,6 +10,20 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [Unreleased]
+
+### Added
+
+- **Built-in HTTPS for a server with a domain.** Two lines in `.env`
+  (`COMPOSE_FILE=docker-compose.yml:deploy/https/caddy.yml` and `DOMAIN=`)
+  add a Caddy container that obtains and renews a Let's Encrypt certificate
+  and serves the dashboard, API and coach at `https://<DOMAIN>`. It also
+  closes plain-HTTP port 8001 to everything but the host.
+- **`FORWARDED_ALLOW_IPS`** passes through to the server, for installs behind
+  their own reverse proxy. Without it every proxied client appears as the
+  proxy: the login rate limit is one bucket shared by everyone and the audit
+  trail shows the proxy's address on every event. The Caddy file sets it.
+
 ## [0.1.17] — 2026-11-12
 
 ### Added
