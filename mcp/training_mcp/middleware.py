@@ -15,7 +15,7 @@ answers 403 with a message that says *not shared*, never *not recorded*.
 
 The server instructions are NOT filtered here — FastMCP fixes them when the
 connection opens, before middleware runs — which is why domain-specific
-guidance belongs on the tools instead (see app/instructions.py).
+guidance belongs on the tools instead (see training_mcp/instructions.py).
 """
 
 import logging
@@ -23,7 +23,7 @@ from typing import Any, Sequence
 
 from fastmcp.server.middleware import Middleware, MiddlewareContext
 
-from app.consent import shared_domains, tool_is_shared
+from training_mcp.consent import shared_domains, tool_is_shared
 
 logger = logging.getLogger(__name__)
 

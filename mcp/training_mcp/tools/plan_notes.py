@@ -17,9 +17,9 @@ from fastmcp import FastMCP
 
 from pydantic import Field
 
-from app.schemas import NoteKind
-from app.services.api_client import client
-from app.wire import text_result
+from training_mcp.schemas import NoteKind
+from training_mcp.services.api_client import client
+from training_mcp.wire import text_result
 
 logger = logging.getLogger(__name__)
 

@@ -26,12 +26,16 @@ ENV VIRTUAL_ENV=/opt/venv
 RUN uv venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
+# The coach MCP is a path dependency of the backend (../mcp in pyproject), so
+# it has to sit beside /app before the sync. uv builds it into a wheel in
+# /opt/venv, which is the only thing the final stage takes from here.
+COPY mcp/ /mcp/
 COPY backend/pyproject.toml backend/uv.lock ./
 # Exactly what uv.lock pins, installed into /opt/venv. Resolving the pyproject
 # ranges instead is how an upstream release (fastmcp 4.0) broke CI with no
 # change here. --locked fails the build if the lock has drifted from
 # pyproject. The app isn't installed as a package (and isn't copied yet),
-# hence --no-install-project.
+# hence --no-install-project — which still installs the MCP path dependency.
 ENV UV_PROJECT_ENVIRONMENT=$VIRTUAL_ENV
 RUN uv sync --locked --no-install-project --extra test
 

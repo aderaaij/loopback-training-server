@@ -7,7 +7,7 @@ The self-hosted backend behind **Loopback – Run Coach**, an iOS running app. I
 
 **Website: [loopback.ardenlab.dev](https://loopback.ardenlab.dev/)**
 
-Built with FastAPI, PostgreSQL, SQLAlchemy, and React. Includes an optional MCP (Model Context Protocol) server so an AI assistant can act as your running coach over the same data.
+Built with FastAPI, PostgreSQL, SQLAlchemy, and React. Includes a built-in MCP (Model Context Protocol) endpoint so an AI assistant can act as your running coach over the same data.
 
 > **This is the server half of a two-part system — you also need the [Loopback iOS app](https://github.com/aderaaij/loopback-training-app).** The app is what feeds the server: it syncs Apple HealthKit workouts and daily health metrics to it, and installs queued workouts on Apple Watch. The server runs fine on its own (API, dashboard, MCP), but without the app nothing puts data in or gets workouts onto your watch. The app installs from the **[public TestFlight beta](https://testflight.apple.com/join/fV73tucs)** (iOS 26), or builds from source.
 
@@ -38,7 +38,7 @@ Built with FastAPI, PostgreSQL, SQLAlchemy, and React. Includes an optional MCP 
 - **Multi-user** — Username/password accounts with per-device API tokens (`POST /api/auth/login`); all data is scoped per user
 - **Web dashboard** — Authenticated React SPA served same-origin by the API: overview, calendar, workouts, plans, health charts, and queue for athletes; user management and system monitoring for admins
 - **Admin & monitoring** — Per-user token inspection/revoke (cut off one stolen device), sync-freshness per athlete, an auth audit trail (logins, password/token/user changes), and a system screen reporting DB size and backup freshness
-- **MCP server** — Let AI assistants query your training data, create workouts and plans, and correlate health metrics via natural language
+- **MCP server** — Built in at `/mcp`: let AI assistants query your training data, create workouts and plans, and correlate health metrics via natural language
 
 ## Quick Start
 
@@ -77,7 +77,7 @@ One instance serves a household: a handful of accounts, all data scoped per user
 1. As `admin`, open **Users** and create an account for each athlete (role `user`).
 2. Each athlete signs into the **dashboard** with their username + password.
 3. In the **[iOS app](https://github.com/aderaaij/loopback-training-app)** ([TestFlight beta](https://testflight.apple.com/join/fV73tucs)), each athlete enters the server URL plus their username + password; the app logs in and stores a per-device token.
-4. Optional AI-coach access: each athlete mints a token in the dashboard (**Settings → Create token**) for their own MCP client (see [MCP Server](#mcp-server-optional)).
+4. Optional AI-coach access: each athlete mints a token in the dashboard (**Settings → Create token**) and points their MCP client at `/mcp` on the same address (see [MCP Server](#mcp-server)).
 
 Passwords, per-device tokens (revoke one stolen device without touching the rest), and deactivation are all managed in the dashboard. The same operations exist as a CLI fallback:
 
@@ -165,6 +165,7 @@ Everything is configured through environment variables in the root `.env` (read 
 | `BOOTSTRAP_ADMIN_USERNAME` | `admin` | First-run admin username |
 | `POSTGRES_PASSWORD` / `POSTGRES_USER` / `POSTGRES_DB` | `training-api` | Database credentials (not published outside the compose network; also fed to the app as `DATABASE_URL`) |
 | `API_PORT` | `8001` | Host port for the API + dashboard |
+| `MCP_ENABLED` | `true` | Serve the coach MCP at `/mcp` on the same port (see [MCP Server](#mcp-server)). `false` removes the endpoint |
 | `BACKUP_HOST_DIR` | `./backups` | Host directory the server writes its `pg_dump` backups to (and reports freshness from) |
 | `BACKUP_ENABLED` | `true` | Server-managed backups: nightly dump, catch-up after downtime, pre-migration dump. `false` = bring your own (see [Backups](#backups)) |
 | `BACKUP_TIME` | `03:30` | Nightly backup time, container-local (set `TZ` to make it your local time) |
@@ -324,48 +325,25 @@ All endpoints except `/api/health` and `/api/auth/login` require a `Bearer` toke
 | `GET` | `/api/nutrition/summary` | Intake, body weight and training load per period (optional: `period=week\|month`, `timezone`) |
 | `DELETE` | `/api/nutrition/{date}` | Remove a whole day's row |
 
-## MCP Server (optional)
+## MCP Server
 
-The `mcp/` directory contains a [FastMCP](https://github.com/jlowin/fastmcp) server that exposes training data to AI assistants (e.g., Claude).
+The server ships with an [MCP](https://modelcontextprotocol.io) endpoint that exposes training data to AI assistants (e.g., Claude), so one can act as your running coach. **It is part of the same container and needs no setup**: wherever the dashboard is reachable, the coach is at `/mcp` on the same address.
 
-### Setup
-
-```bash
-cd mcp
-cp config/.env.example config/.env
+```
+http://<machine-name>:8001/mcp
 ```
 
-Edit `mcp/config/.env` — set `TRAINING_API_KEY` to a token for the account the MCP should act as (mint one in the dashboard: **Settings → Create token**):
-
-```ini
-TRAINING_API_URL=http://localhost:8001
-TRAINING_API_KEY=your-api-token-here
-```
-
-### Run
-
-```bash
-uv run start
-```
-
-The default transport is stdio (for direct MCP clients like Claude Desktop). Set `MCP_TRANSPORT=http` (with optional `MCP_HOST` / `MCP_PORT`) to serve streamable HTTP at `/mcp` instead — useful behind a reverse proxy or on a home server.
-
-**Multi-user:** an `Authorization` header on an incoming HTTP MCP request is forwarded to the backend as-is, so each caller acts as their own user. Set `REQUIRE_AUTH_HEADER=true` to disable the `TRAINING_API_KEY` fallback entirely.
+Each person authenticates with their **own** token in an `Authorization: Bearer` header (mint one in the dashboard: **Settings → Create token**), so the data is scoped to their account — this is the "point your own Claude (or any LLM) at it" path. A request without a bearer token gets a 401. Set `MCP_ENABLED=false` in `.env` to serve no coach endpoint at all.
 
 ### Connect a client
 
-Once it's serving HTTP (`MCP_TRANSPORT=http`), any MCP client can reach the
-server at `http://<machine-name>:8590/mcp`. Each person authenticates with their
-**own** token in an `Authorization: Bearer` header (mint one in the dashboard:
-**Settings → Create token**), so the data is scoped to their account — this is
-the "point your own Claude (or any LLM) at it" path. Substitute your tailnet
-machine name and token in the snippets below.
+Substitute your server's address and your token in the snippets below.
 
 **Claude Code**
 
 ```bash
 claude mcp add training --transport http \
-  http://<machine-name>:8590/mcp \
+  http://<machine-name>:8001/mcp \
   --header "Authorization: Bearer <your-token>"
 ```
 
@@ -378,7 +356,7 @@ claude mcp add training --transport http \
       "command": "npx",
       "args": [
         "-y", "mcp-remote",
-        "http://<machine-name>:8590/mcp",
+        "http://<machine-name>:8001/mcp",
         "--header", "Authorization:${AUTH_HEADER}",
         "--allow-http"
       ],
@@ -394,7 +372,7 @@ claude mcp add training --transport http \
 {
   "mcpServers": {
     "training": {
-      "url": "http://<machine-name>:8590/mcp",
+      "url": "http://<machine-name>:8001/mcp",
       "headers": { "Authorization": "Bearer <your-token>" }
     }
   }
@@ -416,7 +394,7 @@ claude mcp add training --transport http \
   "servers": {
     "training": {
       "type": "http",
-      "url": "http://<machine-name>:8590/mcp",
+      "url": "http://<machine-name>:8001/mcp",
       "headers": { "Authorization": "Bearer ${input:training-token}" }
     }
   }
@@ -436,6 +414,25 @@ instead, so they need a publicly reachable URL ([Tailscale
 Funnel](https://tailscale.com/kb/1223/funnel) or a reverse proxy), and
 claude.ai's connector flow additionally expects OAuth, which this bearer-token
 setup doesn't advertise.
+
+### Running the MCP on its own
+
+Only needed for a client that launches the server itself over stdio, or to run
+the MCP on a different machine than the API. It needs
+[uv](https://docs.astral.sh/uv/).
+
+```bash
+cd mcp
+cp config/.env.example config/.env   # TRAINING_API_URL + TRAINING_API_KEY
+uv run start
+```
+
+`TRAINING_API_KEY` is a token for the account the MCP acts as when the caller
+sends no `Authorization` header (always the case over stdio). The default
+transport is stdio; `MCP_TRANSPORT=http` (with optional `MCP_HOST` /
+`MCP_PORT`, default 8590) serves streamable HTTP at `/mcp` instead, forwarding
+each caller's own `Authorization` header to the API. Set
+`REQUIRE_AUTH_HEADER=true` there to disable the `TRAINING_API_KEY` fallback.
 
 ## Development
 
@@ -497,10 +494,10 @@ docker compose exec app python -m pytest
 │       ├── screens/            # One file per screen (athlete + admin)
 │       └── styles/             # Design tokens + per-screen CSS
 └── mcp/
-    ├── pyproject.toml          # MCP dependencies
-    ├── config/.env.example     # MCP environment template
-    └── app/
-        ├── main.py             # FastMCP server (stdio or streamable HTTP)
+    ├── pyproject.toml          # MCP dependencies (a path dependency of the backend)
+    ├── config/.env.example     # Environment template for running it standalone
+    └── training_mcp/           # Mounted by the backend at /mcp (backend/app/mcp_mount.py)
+        ├── main.py             # FastMCP server (+ standalone stdio / HTTP entry point)
         ├── tools/              # MCP tool definitions
         └── services/           # API client
 ```

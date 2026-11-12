@@ -8,7 +8,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from app.services.api_client import client
+from training_mcp.services.api_client import client
 
 WORKOUT_ID = "11111111-1111-1111-1111-111111111111"
 

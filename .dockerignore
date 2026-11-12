@@ -1,7 +1,9 @@
 # Build context is the repo root (backend/Dockerfile)
 .git
 docs
-mcp
+mcp/.venv
+mcp/tests
+mcp/config/.env
 frontend/node_modules
 frontend/dist
 backend/.venv

@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 from fastmcp.server.dependencies import get_http_headers
 
-from app.config import settings
+from training_mcp.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +74,7 @@ class TrainingClient:
                 "<training-api token>' header with the request."
             )
         if not self._api_key:
-            from app.config import Settings
+            from training_mcp.config import Settings
 
             env_file = Settings.model_config.get("env_file")
             raise ValueError(
@@ -481,7 +481,7 @@ class TrainingClient:
     async def get_data_consent(self) -> dict:
         """Which data categories this athlete shares with the coach.
 
-        Read by app/consent.py to decide which tools to advertise. Never
+        Read by training_mcp/consent.py to decide which tools to advertise. Never
         exposed as a tool: the coach does not need to discuss the athlete's
         privacy settings, it just works with the tools it has.
         """

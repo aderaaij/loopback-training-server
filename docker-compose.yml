@@ -67,6 +67,9 @@ services:
       # (that file's copies only apply to non-Docker runs).
       - BOOTSTRAP_ADMIN_USERNAME
       - BOOTSTRAP_ADMIN_PASSWORD
+      # Coach MCP at /mcp on this same port (on by default). Passes through
+      # only when set in the root .env.
+      - MCP_ENABLED
     volumes:
       # Backup dir: the server writes its own pg_dump files here (nightly +
       # pre-migration + on demand from the System screen, which also reports
