@@ -24,8 +24,15 @@ System screen.
   watermarked).
 - **Metric / imperial display units in the dashboard.** Distance, pace and
   weight can be shown in miles, min/mi and lb. Metric is the default; imperial
-  is opt-in under **Settings → Units**. The choice is stored per browser.
-  Display only: the API and the iOS app are untouched and still speak metric.
+  is opt-in under **Settings → Units**. Display only: the API still speaks
+  metric.
+- **The units choice is stored on your account**, not in the browser, behind
+  the new `GET/PUT /api/me/units`. The dashboard follows it on every device,
+  and a choice already made in a browser is carried over the first time you
+  open the dashboard after upgrading. The coach reads it too: `get_plan_context`
+  now returns `units` and a `units_hint`, so an athlete on miles is coached in
+  miles and gets distance goals authored in miles. Unset (`null`) until
+  someone chooses, so the iOS app can keep defaulting from the phone's region.
   Splits stay 1 km splits (only their pace converts), and server-written
   warning text on the plan screen is shown as written.
 

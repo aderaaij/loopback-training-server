@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react'
 import { api, authStorage, setUnauthorizedHandler } from './api'
 import type { AuthUser, LoginResponse } from './types'
+import { clearUnits, syncUnits } from './units'
 
 interface AuthState {
   user: AuthUser | null
@@ -24,9 +25,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const reset = useCallback(() => {
     authStorage.clear()
+    clearUnits()
     setUser(null)
     setTokenId(null)
   }, [])
+
+  // Units belong to the account: fetch them whenever a session appears, on
+  // page load or after login.
+  const userId = user?.id
+  useEffect(() => {
+    if (userId) void syncUnits()
+  }, [userId])
 
   useEffect(() => {
     setUnauthorizedHandler(reset)
