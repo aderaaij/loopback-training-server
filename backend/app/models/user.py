@@ -39,6 +39,13 @@ class User(Base):
     data_consent_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     data_consent_reported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Display units the athlete reads in: "metric" or "imperial" (app/units.py).
+    # NULL = never chosen, which is not the same as metric: each client then
+    # falls back to its own default (the phone to the device's region) and the
+    # coach to metric. Display only; everything stored and sent stays metric.
+    units: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    units_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     tokens: Mapped[list["ApiToken"]] = relationship(  # noqa: F821
         "ApiToken", back_populates="user", cascade="all, delete-orphan"
     )

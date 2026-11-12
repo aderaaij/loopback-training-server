@@ -154,6 +154,8 @@ _TAIL = """\
     Common activity types: running, cycling, swimming, walking, hiking
     Distance is in meters, duration in seconds, energy in kcal.
     Speed alerts use metersPerSecond (e.g., 4:00/km pace ≈ 4.17 m/s, 5:00/km ≈ 3.33 m/s).
+    The data is always metric, but the athlete may read miles: `get_plan_context` returns
+    their `units` and a `units_hint`. Follow the hint when talking and when authoring workouts.
     """
 
 
