@@ -1,0 +1,48 @@
+# Built-in HTTPS with a real certificate — layered on top of docker-compose.yml.
+#
+# For a server with a public IP (a VPS) and a domain whose DNS points at it.
+# Caddy obtains and renews a Let's Encrypt certificate on its own; ports 80
+# and 443 must be reachable from the internet. Enable it from the root .env:
+#
+#   COMPOSE_FILE=docker-compose.yml:deploy/https/caddy.yml
+#   DOMAIN=loopback.example.com
+#
+# then `docker compose up -d`. Dashboard, API and coach (/mcp) are then at
+# https://<DOMAIN>. See README "Exposing the server".
+
+services:
+  app:
+    # Plain HTTP stays on the host's loopback only — handy for a local health
+    # check, closed to the internet. Everything else arrives through Caddy.
+    ports: !override
+      - "127.0.0.1:${API_PORT:-8001}:8001"
+    environment:
+      # Take the client address from X-Forwarded-For, so the login rate limit
+      # and the audit trail see each client instead of one shared proxy
+      # address. "*" trusts the header from any peer, which is sound ONLY
+      # because of the loopback-only port above: the peers left are Caddy
+      # (which sets the header from the real connection and discards any a
+      # client sent) and processes on this host. Publish 8001 more widely and
+      # anyone can forge their address — keep these two settings together.
+      - FORWARDED_ALLOW_IPS=*
+
+  caddy:
+    image: caddy:2
+    container_name: caddy__training-api
+    command: caddy reverse-proxy --from ${DOMAIN:?set DOMAIN in .env to the hostname that points at this server} --to app:8001
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      # Certificates and the ACME account. Losing this volume just means a
+      # fresh certificate, but repeated loss runs into Let's Encrypt limits.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -106,13 +106,29 @@ docker compose -f docker-compose.demo.yml down -v
 
 ## Exposing the server
 
-The iOS app and dashboard just need to reach port 8001 — over HTTPS, or over HTTP on a network you trust. Options, safest first:
+The iOS app syncs in the background, so the server has to be reachable from wherever the phone is — over HTTPS, or over HTTP on a network you trust. Dashboard, API and coach (`/mcp`) all share the one port, so whichever option you pick covers all three.
 
-- **Tailscale (recommended):** install Tailscale on the server and each phone; clients use `http://<machine-name>:8001` inside the tailnet and nothing is exposed to the internet. If the app must also work for people outside your tailnet, [Tailscale Funnel](https://tailscale.com/kb/1223/funnel) can publish the port (e.g. `tailscale funnel --bg --https 8443 8001`).
-- **Reverse proxy:** put Caddy / nginx / Traefik with a real certificate in front and forward to `127.0.0.1:8001`.
-- **LAN only:** fine for trying it out, but the app syncs in the background, so a phone that leaves the house needs one of the options above.
+### Built-in HTTPS (a server with a public IP and a domain)
 
-If the server ends up publicly reachable: login is rate-limited (5/min/IP), there is no registration endpoint (the first-run setup endpoint closes permanently once the admin account exists), and the admin System screen shows an auth audit trail — but public exposure still means **strong passwords on every account**.
+Point a domain's DNS at the server, make sure ports 80 and 443 are open, and add two lines to `.env`:
+
+```ini
+COMPOSE_FILE=docker-compose.yml:deploy/https/caddy.yml
+DOMAIN=loopback.example.com
+```
+
+Then `docker compose up -d`. This adds a [Caddy](https://caddyserver.com) container that obtains and renews a Let's Encrypt certificate by itself and serves everything at `https://<DOMAIN>`. It also closes plain-HTTP port 8001 to everything but the host itself, and makes the server see each client's real address, so the login rate limit applies per client and the audit trail shows who connected.
+
+`COMPOSE_FILE` replaces Compose's automatic file discovery: if you keep a `docker-compose.override.yml`, add it to the list (`docker-compose.yml:docker-compose.override.yml:deploy/https/caddy.yml`). On Windows the separator is `;`.
+
+### Other ways
+
+- **Tailscale:** install Tailscale on the server and each phone; clients use `http://<machine-name>:8001` inside the tailnet and nothing is exposed to the internet. If the app must also work for people outside your tailnet, [Tailscale Funnel](https://tailscale.com/kb/1223/funnel) can publish the port (e.g. `tailscale funnel --bg --https 8443 8001`). Needs no domain and no open port, so it suits a home server.
+- **Cloudflare Tunnel:** also works from behind a home router, with a domain on Cloudflare. Be aware that Cloudflare terminates the TLS connection, so it can read the health data passing through; with Caddy or Tailscale it is only ever decrypted on your own machine. [`deploy/demo/docker-compose.public.yml`](deploy/demo/docker-compose.public.yml) shows the pattern.
+- **Your own reverse proxy:** put nginx / Traefik / Caddy with a real certificate in front and forward to `127.0.0.1:8001`. Set `FORWARDED_ALLOW_IPS` in `.env` to the address the proxy connects from, or every client shares one rate limit (see [Configuration](#configuration)).
+- **LAN only:** fine for trying it out, but a phone that leaves the house stops syncing.
+
+If the server ends up publicly reachable: login is rate-limited (5/min per client address), there is no registration endpoint (the first-run setup endpoint closes permanently once the admin account exists), and the admin System screen shows an auth audit trail — but public exposure still means **strong passwords on every account**.
 
 ## Backups
 
@@ -166,6 +182,8 @@ Everything is configured through environment variables in the root `.env` (read 
 | `POSTGRES_PASSWORD` / `POSTGRES_USER` / `POSTGRES_DB` | `training-api` | Database credentials (not published outside the compose network; also fed to the app as `DATABASE_URL`) |
 | `API_PORT` | `8001` | Host port for the API + dashboard |
 | `MCP_ENABLED` | `true` | Serve the coach MCP at `/mcp` on the same port (see [MCP Server](#mcp-server)). `false` removes the endpoint |
+| `FORWARDED_ALLOW_IPS` | *(unset)* | Behind a reverse proxy: the address(es) or CIDR the proxy connects from, whose `X-Forwarded-For` the server trusts for the client address (login rate limit, audit trail). Unset, only loopback is trusted and every proxied client looks like the proxy. `deploy/https/caddy.yml` sets this for you. Never use `*` while port 8001 is reachable by anything but the proxy |
+| `DOMAIN` | *(unset)* | Hostname for built-in HTTPS, used with `deploy/https/caddy.yml` (see [Exposing the server](#exposing-the-server)) |
 | `BACKUP_HOST_DIR` | `./backups` | Host directory the server writes its `pg_dump` backups to (and reports freshness from) |
 | `BACKUP_ENABLED` | `true` | Server-managed backups: nightly dump, catch-up after downtime, pre-migration dump. `false` = bring your own (see [Backups](#backups)) |
 | `BACKUP_TIME` | `03:30` | Nightly backup time, container-local (set `TZ` to make it your local time) |
