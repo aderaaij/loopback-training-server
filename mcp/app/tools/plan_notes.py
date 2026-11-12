@@ -59,6 +59,10 @@ async def get_plan_context(
           - last_note_age_days: age of the most recent note (or null)
           - continuity_hint: a directive for how aggressively to save notes
             this conversation
+          - units: "metric", "imperial" or null (the athlete has not chosen)
+          - units_hint: how to talk and author workouts for this athlete's
+            units. Follow it: an athlete on miles should never be handed
+            kilometers.
     """
     try:
         return await client.get_plan_context(

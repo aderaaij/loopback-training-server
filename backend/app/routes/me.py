@@ -1,10 +1,11 @@
 """Self-service endpoints operating on the token's own user.
 
-Currently just data consent. camelCase on the wire like the other
+Data consent and the display-units preference. camelCase on the wire like the other
 identity-shaped routes (auth, admin), not the snake_case of the data routes.
 """
 
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
@@ -38,6 +39,21 @@ class DataConsentOut(_CamelModel):
     reported_at: datetime | None
 
 
+Units = Literal["metric", "imperial"]
+
+
+class UnitsUpdate(_CamelModel):
+    units: Units
+
+
+class UnitsOut(_CamelModel):
+    # null = never chosen. Deliberately not defaulted to metric here: the phone
+    # falls back to the device's region and must be able to tell "nobody has
+    # picked" from "picked metric", or it could never offer its own default.
+    units: Units | None
+    updated_at: datetime | None
+
+
 def _out(user) -> DataConsentOut:
     domains, updated_at, reported_at = consent_state(user)
     return DataConsentOut(domains=domains, updated_at=updated_at, reported_at=reported_at)
@@ -51,6 +67,7 @@ def _out(user) -> DataConsentOut:
 # reporting before this endpoint existed at all. A client that appends a slash
 # would keep seeing the same 405 forever and have no way to tell why.
 _PATHS = ("/data-consent", "/data-consent/")
+_UNITS_PATHS = ("/units", "/units/")
 
 
 @router.get(_PATHS[0], response_model=DataConsentOut)
@@ -102,3 +119,33 @@ def put_data_consent(
     db.commit()
     db.refresh(user)
     return _out(user)
+
+
+@router.get(_UNITS_PATHS[0], response_model=UnitsOut)
+@router.get(_UNITS_PATHS[1], response_model=UnitsOut, include_in_schema=False)
+def get_units(user: CurrentUser) -> UnitsOut:
+    """The units this user reads distance, pace and weight in.
+
+    One preference for every surface: the dashboard and the iOS app follow it,
+    and the coach reads it to write and talk in the athlete's units. Display
+    only; the API itself always speaks metric.
+    """
+    return UnitsOut(units=user.units, updated_at=user.units_updated_at)
+
+
+@router.put(_UNITS_PATHS[0], response_model=UnitsOut)
+@router.put(_UNITS_PATHS[1], response_model=UnitsOut, include_in_schema=False)
+def put_units(body: UnitsUpdate, db: DbSession, user: CurrentUser) -> UnitsOut:
+    """Set the preference.
+
+    Unlike data consent, the vocabulary is closed: an unknown value is a 422,
+    because there is nothing sensible to do with a unit system no client can
+    render. `updatedAt` moves only when the value changes, so a client that
+    re-sends its current choice doesn't look like a fresh decision.
+    """
+    if user.units != body.units or user.units_updated_at is None:
+        user.units = body.units
+        user.units_updated_at = func.now()
+        db.commit()
+        db.refresh(user)
+    return UnitsOut(units=user.units, updated_at=user.units_updated_at)

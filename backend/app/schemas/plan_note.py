@@ -56,3 +56,9 @@ class PlanContext(BaseModel):
     notes: list[PlanNoteRead]
     last_note_age_days: int | None
     continuity_hint: str
+    # The athlete's display units ("metric" / "imperial"; null = never chosen)
+    # and what the coach should do about them. Here rather than in the MCP's
+    # instructions because those are fixed per server, not per athlete, and
+    # this is the one call the coach makes at the start of every conversation.
+    units: str | None = None
+    units_hint: str = ""

@@ -141,6 +141,32 @@ def get_context(
         notes=notes,
         last_note_age_days=last_note_age_days,
         continuity_hint=hint,
+        units=user.units,
+        units_hint=_units_hint(user.units),
+    )
+
+
+def _units_hint(units: str | None) -> str:
+    """What the coach should do with the athlete's units.
+
+    The data stays metric whatever this says; the hint is about how to talk
+    and what to write into a workout the athlete will read on their phone.
+    """
+    if units == "imperial":
+        return (
+            "This athlete reads miles, min/mi and lb. All data you receive is still "
+            "metric (meters, seconds, kg): convert when you talk to them. When you "
+            "create or edit a workout, author distance goals in miles (unit \"miles\") "
+            "with round mile figures, and write titles and descriptions in miles. "
+            "Track reps stay in meters (400 m, 800 m). Speed alerts are still "
+            "metersPerSecond; convert from the min/mi pace you agreed on."
+        )
+    if units == "metric":
+        return "This athlete reads kilometers, min/km and kg."
+    return (
+        "The athlete has not chosen display units. Use kilometers, min/km and kg "
+        "unless they talk in miles; if they do, follow them and suggest setting "
+        "Units to Miles in the app or dashboard settings."
     )
 
 

@@ -273,7 +273,7 @@ export function Settings() {
             Distance, pace &amp; weight
           </div>
           <div className="mono-meta" style={{ marginTop: 3 }}>
-            {units === 'imperial' ? 'miles, min/mi, lb' : 'kilometers, min/km, kg'} · this browser only
+            {units === 'imperial' ? 'miles, min/mi, lb' : 'kilometers, min/km, kg'} · also used by the app and your coach
           </div>
         </div>
         <div className="seg-toggle">
