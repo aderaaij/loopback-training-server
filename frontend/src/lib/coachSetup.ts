@@ -33,11 +33,14 @@ export function coachUrl(origin: string): string {
   return `${origin.replace(/\/+$/, '')}/mcp`
 }
 
-/** mcp-remote refuses plain http to anything but the local machine. */
+/**
+ * mcp-remote refuses plain http unless told otherwise. It exempts only the
+ * names `localhost` and `127.0.0.1` (not `[::1]`), and the flag is harmless
+ * there, so every http address gets it rather than mirroring that list.
+ */
 export function needsAllowHttp(url: string): boolean {
   try {
-    const u = new URL(url)
-    return u.protocol === 'http:' && !['localhost', '127.0.0.1', '[::1]'].includes(u.hostname)
+    return new URL(url).protocol === 'http:'
   } catch {
     return false
   }
@@ -58,7 +61,7 @@ export function buildCoachSetup(client: CoachClientId, url: string, token: strin
       if (needsAllowHttp(url)) args.push('--allow-http')
       return {
         steps: [
-          'Install Node.js 18 or newer from nodejs.org if you don’t have it.',
+          'Install Node.js 20 or newer from nodejs.org if you don’t have it.',
           'In Claude Desktop, open Settings → Developer → Edit config.',
           'Paste the block below. If the file already has "mcpServers", add only the "training" entry inside it.',
           'Quit Claude Desktop completely and reopen it. Settings → Developer should show "training" as Running.',
@@ -73,8 +76,12 @@ export function buildCoachSetup(client: CoachClientId, url: string, token: strin
     }
     case 'claude-code':
       return {
-        steps: ['Run this in a terminal.', 'Start Claude Code and ask “What did I run this week?”'],
-        snippet: `claude mcp add ${SERVER_NAME} --transport http \\\n  ${url} \\\n  --header "Authorization: ${bearer}"`,
+        steps: ['Run this in a terminal.', 'Start Claude Code in any folder and ask “What did I run this week?”'],
+        // One line, no continuations: a trailing backslash only means "next
+        // line" in bash and zsh, and this is pasted into PowerShell and cmd
+        // too. --scope user, because the default registers the server for the
+        // current folder only.
+        snippet: `claude mcp add ${SERVER_NAME} --scope user --transport http ${url} --header "Authorization: ${bearer}"`,
         snippetHasToken: true,
       }
     case 'cursor':
