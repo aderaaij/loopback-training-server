@@ -77,7 +77,7 @@ One instance serves a household: a handful of accounts, all data scoped per user
 1. As `admin`, open **Users** and create an account for each athlete (role `user`).
 2. Each athlete signs into the **dashboard** with their username + password.
 3. In the **[iOS app](https://github.com/aderaaij/loopback-training-app)** ([TestFlight beta](https://testflight.apple.com/join/fV73tucs)), each athlete enters the server URL plus their username + password; the app logs in and stores a per-device token.
-4. Optional AI-coach access: each athlete mints a token in the dashboard (**Settings → Create token**) and points their MCP client at `/mcp` on the same address (see [MCP Server](#mcp-server)).
+4. Optional AI-coach access: each athlete mints a token in the dashboard (**Settings → New token**) and points their MCP client at `/mcp` on the same address (see [MCP Server](#mcp-server)).
 
 Passwords, per-device tokens (revoke one stolen device without touching the rest), and deactivation are all managed in the dashboard. The same operations exist as a CLI fallback:
 
@@ -333,7 +333,7 @@ The server ships with an [MCP](https://modelcontextprotocol.io) endpoint that ex
 http://<machine-name>:8001/mcp
 ```
 
-Each person authenticates with their **own** token in an `Authorization: Bearer` header (mint one in the dashboard: **Settings → Create token**), so the data is scoped to their account — this is the "point your own Claude (or any LLM) at it" path. A request without a bearer token gets a 401. Set `MCP_ENABLED=false` in `.env` to serve no coach endpoint at all.
+Each person authenticates with their **own** token in an `Authorization: Bearer` header (mint one in the dashboard: **Settings → New token**), so the data is scoped to their account — this is the "point your own Claude (or any LLM) at it" path. A request without a bearer token gets a 401. Set `MCP_ENABLED=false` in `.env` to serve no coach endpoint at all.
 
 ### Connect a client
 
@@ -347,24 +347,53 @@ claude mcp add training --transport http \
   --header "Authorization: Bearer <your-token>"
 ```
 
-**Claude Desktop** — bridge remote HTTP via [`mcp-remote`](https://github.com/geelen/mcp-remote) (the `Authorization:${AUTH_HEADER}` form sidesteps an arg-parsing bug with spaces in header values; `--allow-http` is required for plain-http hosts other than localhost — fine here, since tailnet traffic is WireGuard-encrypted end to end). Add to `claude_desktop_config.json`:
+**Claude Desktop**
 
-```json
-{
-  "mcpServers": {
-    "training": {
-      "command": "npx",
-      "args": [
-        "-y", "mcp-remote",
-        "http://<machine-name>:8001/mcp",
-        "--header", "Authorization:${AUTH_HEADER}",
-        "--allow-http"
-      ],
-      "env": { "AUTH_HEADER": "Bearer <your-token>" }
-    }
-  }
-}
-```
+Claude Desktop cannot send a bearer token to a remote server by itself, so a small helper ([`mcp-remote`](https://github.com/geelen/mcp-remote)) does it. Do not use **Settings → Connectors → Add custom connector**: that flow connects from Anthropic's servers and expects OAuth, so it does not work with this server (see [Reachability](#reachability)).
+
+1. **Install [Node.js](https://nodejs.org)** (18 or newer) if you don't have it. The helper runs through `npx`, which comes with Node.
+2. **Create a token.** In the Loopback dashboard go to **Settings → New token**, name it (e.g. "Claude Desktop") and copy it. It is shown only once.
+3. **Open the config file.** In Claude Desktop: **Settings → Developer → Edit config**. This opens `claude_desktop_config.json`:
+   - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+4. **Add the server.** If the file is empty, paste this whole block. If it already has an `mcpServers` section, add only the `"training": { … }` entry inside it.
+
+   ```json
+   {
+     "mcpServers": {
+       "training": {
+         "command": "npx",
+         "args": [
+           "-y", "mcp-remote",
+           "https://<your-server>/mcp",
+           "--header", "Authorization:${AUTH_HEADER}"
+         ],
+         "env": { "AUTH_HEADER": "Bearer <your-token>" }
+       }
+     }
+   }
+   ```
+
+   Replace `https://<your-server>/mcp` with the address you open the dashboard at, plus `/mcp`, and `<your-token>` with the token from step 2 (keep the word `Bearer` and the space in front of it).
+
+   If your address starts with `http://` (for example `http://<machine-name>:8001` inside a tailnet), add one more line to `args`, or the helper refuses to connect:
+
+   ```json
+           "--header", "Authorization:${AUTH_HEADER}",
+           "--allow-http"
+   ```
+
+5. **Quit Claude Desktop completely and reopen it.** The config is only read at startup, and closing the window is not enough (macOS: Cmd+Q; Windows: quit from the system tray icon).
+6. **Check it works.** **Settings → Developer** should list `training` with the status **Running**. Then ask in a new chat: *"What did I run this week?"*
+
+If it does not connect:
+
+- **`training` shows Failed or Not responding:** click **View logs** next to it (the file is `mcp-server-training.log`, in `~/Library/Logs/Claude/` on macOS or `%APPDATA%\Claude\logs\` on Windows). The usual causes are invalid JSON (a missing comma) or Node.js not being found.
+- **`npx` not found although Node.js is installed:** Claude Desktop does not read your shell profile, so a Node.js installed through a version manager (nvm, fnm, asdf) is invisible to it. Run `which npx` in a terminal and use that full path as `"command"` in place of `"npx"`.
+- **401 errors in the log:** the token is wrong, was revoked, or `Bearer ` is missing in front of it.
+- **Timeouts:** this computer cannot reach the server. Open the dashboard address in a browser on the same computer to confirm.
+
+Why the config looks like this: the token goes in `env` and is referenced as `${AUTH_HEADER}` because Claude Desktop on Windows mishandles spaces inside `args` values (on macOS a plain `"Authorization: Bearer <your-token>"` argument also works). `--allow-http` is needed because `mcp-remote` refuses plain HTTP to anything but localhost; that is acceptable inside a tailnet, where traffic is already encrypted by WireGuard, and not on the open internet.
 
 **Cursor** (`~/.cursor/mcp.json`)
 
@@ -407,8 +436,8 @@ header (Cline, the OpenAI Agents SDK's `MCPServerStreamableHttp`, LangChain's
 behind the client is your choice. Sanity-check a new setup with
 `npx @modelcontextprotocol/inspector`.
 
-**Reachability:** clients that run on your own machine (the four above) reach the
-server directly over the tailnet. Cloud-hosted connectors — claude.ai's web
+<a id="reachability"></a>**Reachability:** clients that run on your own machine (the four above) reach the
+server directly, at the same address as the dashboard. Cloud-hosted connectors — claude.ai's web
 connectors, OpenAI's *hosted* MCP tool — call from the provider's servers
 instead, so they need a publicly reachable URL ([Tailscale
 Funnel](https://tailscale.com/kb/1223/funnel) or a reverse proxy), and
