@@ -24,8 +24,9 @@ System screen.
 
 ### Fixed
 
-- **Setup instructions for Claude Desktop and Claude Code.** Node.js 20 is the
-  minimum (the `mcp-remote` helper no longer runs on 18), and the Claude Code
+- **Setup instructions for Claude Desktop and Claude Code.** Node.js 20.18 is
+  the stated minimum (what the `mcp-remote` helper's dependencies now declare;
+  the instructions said 18), and the Claude Code
   command now uses `--scope user`: without it the server was registered only
   for the folder the command happened to be run in.
 

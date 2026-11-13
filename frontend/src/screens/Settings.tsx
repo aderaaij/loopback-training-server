@@ -280,6 +280,7 @@ function ConnectCoachModal({ onClose }: { onClose: () => void }) {
   const url = coachUrl(window.location.origin)
   const token = mint.data?.token
   const setup = token ? buildCoachSetup(client, url, token) : null
+  const locked = token != null || mint.isPending
 
   return (
     <Modal onClose={onClose} width={560}>
@@ -296,11 +297,12 @@ function ConnectCoachModal({ onClose }: { onClose: () => void }) {
             key={c.id}
             className={`filter-chip${client === c.id ? ' on' : ''}`}
             aria-pressed={client === c.id}
-            // The token is named after the client it was created for, so once
-            // it exists the choice is fixed: another app gets its own token,
-            // which keeps each one identifiable and revocable on its own.
-            disabled={token != null && client !== c.id}
-            style={token != null && client !== c.id ? { opacity: 0.4, cursor: 'default' } : undefined}
+            // The token is named after the client it was created for, so from
+            // the moment the request is sent the choice is fixed: another app
+            // gets its own token, which keeps each one identifiable and
+            // revocable on its own.
+            disabled={locked && client !== c.id}
+            style={locked && client !== c.id ? { opacity: 0.4, cursor: 'default' } : undefined}
             onClick={() => setClient(c.id)}
           >
             {c.label}

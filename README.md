@@ -347,11 +347,13 @@ claude mcp add training --scope user --transport http \
   --header "Authorization: Bearer <your-token>"
 ```
 
+`--scope user` makes the server available in every folder. To replace an existing entry (for example after rotating the token), run `claude mcp remove training --scope user` first; `add` refuses to overwrite.
+
 **Claude Desktop**
 
 Claude Desktop cannot send a bearer token to a remote server by itself, so a small helper ([`mcp-remote`](https://github.com/geelen/mcp-remote)) does it. Do not use **Settings → Connectors → Add custom connector**: that flow connects from Anthropic's servers and expects OAuth, so it does not work with this server (see [Reachability](#reachability)).
 
-1. **Install [Node.js](https://nodejs.org)** (20 or newer) if you don't have it. The helper runs through `npx`, which comes with Node.
+1. **Install [Node.js](https://nodejs.org)** (20.18 or newer) if you don't have it. The helper runs through `npx`, which comes with Node.
 2. **Create a token.** In the Loopback dashboard go to **Settings → New token**, name it (e.g. "Claude Desktop") and copy it. It is shown only once.
 3. **Open the config file.** In Claude Desktop: **Settings → Developer → Edit config**. This opens `claude_desktop_config.json`:
    - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`

@@ -61,7 +61,7 @@ export function buildCoachSetup(client: CoachClientId, url: string, token: strin
       if (needsAllowHttp(url)) args.push('--allow-http')
       return {
         steps: [
-          'Install Node.js 20 or newer from nodejs.org if you don’t have it.',
+          'Install a current Node.js (20.18 or newer) from nodejs.org if you don’t have it.',
           'In Claude Desktop, open Settings → Developer → Edit config.',
           'Paste the block below. If the file already has "mcpServers", add only the "training" entry inside it.',
           'Quit Claude Desktop completely and reopen it. Settings → Developer should show "training" as Running.',
@@ -76,7 +76,11 @@ export function buildCoachSetup(client: CoachClientId, url: string, token: strin
     }
     case 'claude-code':
       return {
-        steps: ['Run this in a terminal.', 'Start Claude Code in any folder and ask “What did I run this week?”'],
+        steps: [
+          'Run this in a terminal.',
+          'If it says "training" already exists, run "claude mcp remove training --scope user" and try again.',
+          'Start Claude Code in any folder and ask “What did I run this week?”',
+        ],
         // One line, no continuations: a trailing backslash only means "next
         // line" in bash and zsh, and this is pasted into PowerShell and cmd
         // too. --scope user, because the default registers the server for the
