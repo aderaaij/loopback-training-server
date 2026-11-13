@@ -47,7 +47,7 @@ mcp/
 The authenticated React dashboard replaces the old unauthenticated server-rendered one.
 It is served **same-origin by FastAPI**: the Docker build bakes `frontend/dist` into the
 image at `/app/static` (`SPA_DIST` env var), `main.py` serves it at `/` with an SPA
-fallback for client-side routes. No CORS needed; the Tailscale Funnel setup is unchanged.
+fallback for client-side routes. No CORS needed; the Tailscale Serve setup is unchanged.
 
 ```bash
 cd frontend
@@ -115,7 +115,7 @@ change/reset, token create/revoke, and user create/deactivate/reactivate. FKs ar
 (failed logins never resolve to a user). Events stage on the caller's session so they
 commit atomically with the change they describe; the rate-limit handler (`main.py`)
 uses its own short-lived session. The events endpoint opportunistically prunes rows
->365d on read (no timer). The publicly-Funnel-exposed login endpoint made this the
+>365d on read (no timer). A login endpoint that may be publicly exposed (Funnel, Caddy) made this the
 genuinely monitoring-shaped addition — failed-login/rate-limit visibility.
 
 ## Development
@@ -318,4 +318,4 @@ docker compose up -d --build     # Deploy changes
 docker compose logs -f backend   # Check logs
 ```
 
-This deployment is exposed via Tailscale Funnel (HTTPS on :8443, proxying the API on :8001) for iPhone app access.
+This deployment is served by **Tailscale Serve, tailnet-only** (HTTPS on :8443 → `127.0.0.1:8001`, Let's Encrypt cert managed by Tailscale) for iPhone app access. It is **not** on Funnel: the hostname has no public DNS record and nothing is reachable from the internet (verified 2026-11-13 with `tailscale serve status` on the host; earlier versions of this file said Funnel). Cloud-hosted MCP connectors (claude.ai, mobile) therefore cannot reach it.

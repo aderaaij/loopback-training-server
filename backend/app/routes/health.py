@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from sqlalchemy import text
 
 from app.database import DbSession
+from app.mcp_mount import MCP_ENABLED
 from app.version import __version__
 
 router = APIRouter()
@@ -19,4 +20,7 @@ def health(db: DbSession):
         "service": "training-api",
         "version": __version__,
         "database": db_status,
+        # Lets the dashboard hide its "connect your coach" setup when the
+        # endpoint is switched off. Not a secret: anyone can probe /mcp.
+        "mcp": MCP_ENABLED,
     }

@@ -337,7 +337,7 @@ Each person authenticates with their **own** token in an `Authorization: Bearer`
 
 ### Connect a client
 
-Substitute your server's address and your token in the snippets below.
+The quickest way: in the dashboard, **Settings → AI coach → Connect** creates a token and shows the setup for your client with the server address and token already filled in. The snippets below are the same thing by hand; substitute your server's address and your token.
 
 **Claude Code**
 

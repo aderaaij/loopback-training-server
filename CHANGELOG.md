@@ -10,6 +10,17 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [Unreleased]
+
+### Added
+
+- **"Connect your coach" in the dashboard.** Settings has an AI coach card for
+  athletes: pick Claude Desktop, Claude Code, Cursor, VS Code or another client,
+  and it creates a token and shows the setup with the server address and token
+  already filled in, ready to copy. Hidden for admins and when
+  `MCP_ENABLED=false`; `/api/health` now reports `mcp` so the dashboard can
+  tell.
+
 ## [0.1.17] — 2026-11-12
 
 ### Added
