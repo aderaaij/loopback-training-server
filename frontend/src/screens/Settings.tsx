@@ -5,7 +5,9 @@ import { usePageHeader } from '../components/PageHeader'
 import { ConfirmDialog, ErrorNote, Loading, Modal, SectionLabel } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { clientLabel, fmtDayYear, relTime } from '../lib/format'
-import { useChangePassword, useMe, useMintToken, useRevokeToken } from '../lib/queries'
+import { COACH_CLIENTS, buildCoachSetup, coachUrl } from '../lib/coachSetup'
+import type { CoachClientId } from '../lib/coachSetup'
+import { useChangePassword, useLiveness, useMe, useMintToken, useRevokeToken } from '../lib/queries'
 import type { ApiTokenInfo } from '../lib/types'
 import { setUnits, useUnits } from '../lib/units'
 import '../styles/settings.css'
@@ -229,6 +231,134 @@ function NewTokenModal({ onClose }: { onClose: () => void }) {
   )
 }
 
+// The clipboard API only exists on secure origins, and a tailnet install is
+// often plain http, so fall back to the legacy copy command and report
+// honestly whether anything landed on the clipboard.
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {
+    // fall through to the legacy path
+  }
+  const ta = document.createElement('textarea')
+  ta.value = text
+  ta.style.position = 'fixed'
+  ta.style.opacity = '0'
+  document.body.appendChild(ta)
+  ta.select()
+  let ok = false
+  try {
+    ok = document.execCommand('copy')
+  } catch {
+    ok = false
+  }
+  ta.remove()
+  return ok
+}
+
+function CopyButton({ text, label }: { text: string; label: string }) {
+  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  return (
+    <button
+      className="btn-accent"
+      style={{ flex: 1 }}
+      onClick={() => void copyText(text).then((ok) => setState(ok ? 'copied' : 'failed'))}
+    >
+      {state === 'copied' ? <Check size={15} weight="bold" /> : <Copy size={15} />}
+      {state === 'copied' ? 'Copied' : state === 'failed' ? 'Select the text to copy' : label}
+    </button>
+  )
+}
+
+function ConnectCoachModal({ onClose }: { onClose: () => void }) {
+  const mint = useMintToken()
+  const [client, setClient] = useState<CoachClientId>('claude-desktop')
+  const clientLabel = COACH_CLIENTS.find((c) => c.id === client)?.label ?? ''
+  const url = coachUrl(window.location.origin)
+  const token = mint.data?.token
+  const setup = token ? buildCoachSetup(client, url, token) : null
+
+  return (
+    <Modal onClose={onClose} width={560}>
+      <div className="display" style={{ fontSize: 20, fontWeight: 600 }}>
+        Connect your coach
+      </div>
+      <div style={{ fontSize: 12.5, color: 'var(--muted)', margin: '5px 0 16px' }}>
+        Let an AI assistant read your training data and plan with you. Pick the app you use.
+      </div>
+
+      <div className="connect-clients">
+        {COACH_CLIENTS.map((c) => (
+          <button
+            key={c.id}
+            className={`filter-chip${client === c.id ? ' on' : ''}`}
+            onClick={() => setClient(c.id)}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+
+      {setup && token ? (
+        <>
+          <ol className="connect-steps">
+            {setup.steps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+          <div className="cli-box connect-snippet">{setup.snippet}</div>
+          {!setup.snippetHasToken && (
+            <div className="cli-box connect-snippet" style={{ marginTop: 10, wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
+              {token}
+            </div>
+          )}
+          <p className="connect-warn">
+            {setup.snippetHasToken ? 'This contains your token. ' : 'This is your token. '}
+            It is shown <strong style={{ color: 'var(--amber)' }}>only this once</strong>; revoke it under Devices &amp;
+            tokens if it leaks.
+          </p>
+          <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+            <button className="btn-ghost" style={{ flex: 1 }} onClick={onClose}>
+              Done
+            </button>
+            {!setup.snippetHasToken && <CopyButton key={`${client}-token`} text={token} label="Copy token" />}
+            <CopyButton key={client} text={setup.snippet} label={setup.snippetHasToken ? 'Copy' : 'Copy config'} />
+          </div>
+        </>
+      ) : (
+        <>
+          <div style={{ fontSize: 13, color: 'var(--text-3)', lineHeight: 1.55 }}>
+            This creates a token named <strong>Coach · {clientLabel}</strong> and shows the setup with it filled in.
+            The coach connects to <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{url}</span>, so the
+            app has to be able to reach this address.
+          </div>
+          {mint.error != null && (
+            <div style={{ marginTop: 12 }}>
+              <ErrorNote error={mint.error} />
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
+            <button className="btn-ghost" style={{ flex: 1 }} onClick={onClose}>
+              Cancel
+            </button>
+            <button
+              className="btn-accent"
+              style={{ flex: 1 }}
+              disabled={mint.isPending}
+              onClick={() => mint.mutate({ name: `Coach · ${clientLabel}` })}
+            >
+              {mint.isPending ? 'Creating…' : 'Create token & show setup'}
+            </button>
+          </div>
+        </>
+      )}
+    </Modal>
+  )
+}
+
 export function Settings() {
   const { user, tokenId, logout } = useAuth()
   const { data, isLoading, error } = useMe()
@@ -238,11 +368,15 @@ export function Settings() {
   const [confirmLogout, setConfirmLogout] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
   const [mintingToken, setMintingToken] = useState(false)
+  const [connectingCoach, setConnectingCoach] = useState(false)
+  const liveness = useLiveness()
 
   usePageHeader('Settings', data ? `${data.tokens.length} active tokens` : undefined)
 
   const me = data?.user ?? user
   const initial = (me?.displayName || me?.username || '?').charAt(0).toUpperCase()
+  // Admins have no training data, and a server can switch the endpoint off.
+  const canConnectCoach = me?.role !== 'admin' && liveness.data?.mcp !== false
 
   return (
     <div className="settings-wrap screen">
@@ -285,6 +419,30 @@ export function Settings() {
           </button>
         </div>
       </div>
+
+      {canConnectCoach && (
+        <>
+          <div style={{ marginBottom: 12 }}>
+            <SectionLabel>AI coach</SectionLabel>
+          </div>
+          <div className="profile-card">
+            <span className="icon-tile" style={{ width: 36, height: 36, color: 'var(--accent)' }}>
+              <Brain size={19} />
+            </span>
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <div className="display" style={{ fontSize: 16, fontWeight: 600 }}>
+                Connect Claude or another assistant
+              </div>
+              <div className="mono-meta" style={{ marginTop: 3 }}>
+                ready-to-paste setup for Claude Desktop, Claude Code, Cursor and VS Code
+              </div>
+            </div>
+            <button className="btn-accent" style={{ padding: '9px 16px', fontSize: 13 }} onClick={() => setConnectingCoach(true)}>
+              Connect
+            </button>
+          </div>
+        </>
+      )}
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <SectionLabel>Devices &amp; tokens</SectionLabel>
@@ -344,6 +502,7 @@ export function Settings() {
 
       {changingPassword && <ChangePasswordModal onClose={() => setChangingPassword(false)} />}
       {mintingToken && <NewTokenModal onClose={() => setMintingToken(false)} />}
+      {connectingCoach && <ConnectCoachModal onClose={() => setConnectingCoach(false)} />}
 
       {revoking && (
         <ConfirmDialog
