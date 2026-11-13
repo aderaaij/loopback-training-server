@@ -10,7 +10,7 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
-## [Unreleased]
+## [0.1.18] — 2026-11-13
 
 ### Added
 
