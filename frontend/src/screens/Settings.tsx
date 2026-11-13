@@ -276,10 +276,11 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 function ConnectCoachModal({ onClose }: { onClose: () => void }) {
   const mint = useMintToken()
   const [client, setClient] = useState<CoachClientId>('claude-desktop')
-  const clientLabel = COACH_CLIENTS.find((c) => c.id === client)?.label ?? ''
+  const clientName = COACH_CLIENTS.find((c) => c.id === client)?.label ?? ''
   const url = coachUrl(window.location.origin)
   const token = mint.data?.token
   const setup = token ? buildCoachSetup(client, url, token) : null
+  const locked = token != null || mint.isPending
 
   return (
     <Modal onClose={onClose} width={560}>
@@ -295,6 +296,13 @@ function ConnectCoachModal({ onClose }: { onClose: () => void }) {
           <button
             key={c.id}
             className={`filter-chip${client === c.id ? ' on' : ''}`}
+            aria-pressed={client === c.id}
+            // The token is named after the client it was created for, so from
+            // the moment the request is sent the choice is fixed: another app
+            // gets its own token, which keeps each one identifiable and
+            // revocable on its own.
+            disabled={locked && client !== c.id}
+            style={locked && client !== c.id ? { opacity: 0.4, cursor: 'default' } : undefined}
             onClick={() => setClient(c.id)}
           >
             {c.label}
@@ -318,7 +326,7 @@ function ConnectCoachModal({ onClose }: { onClose: () => void }) {
           <p className="connect-warn">
             {setup.snippetHasToken ? 'This contains your token. ' : 'This is your token. '}
             It is shown <strong style={{ color: 'var(--amber)' }}>only this once</strong>; revoke it under Devices &amp;
-            tokens if it leaks.
+            tokens if it leaks. To set up another app, close this and connect again: each app gets its own token.
           </p>
           <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
             <button className="btn-ghost" style={{ flex: 1 }} onClick={onClose}>
@@ -331,7 +339,7 @@ function ConnectCoachModal({ onClose }: { onClose: () => void }) {
       ) : (
         <>
           <div style={{ fontSize: 13, color: 'var(--text-3)', lineHeight: 1.55 }}>
-            This creates a token named <strong>Coach · {clientLabel}</strong> and shows the setup with it filled in.
+            This creates a token named <strong>Coach · {clientName}</strong> and shows the setup with it filled in.
             The coach connects to <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{url}</span>, so the
             app has to be able to reach this address.
           </div>
@@ -348,7 +356,7 @@ function ConnectCoachModal({ onClose }: { onClose: () => void }) {
               className="btn-accent"
               style={{ flex: 1 }}
               disabled={mint.isPending}
-              onClick={() => mint.mutate({ name: `Coach · ${clientLabel}` })}
+              onClick={() => mint.mutate({ name: `Coach · ${clientName}` })}
             >
               {mint.isPending ? 'Creating…' : 'Create token & show setup'}
             </button>

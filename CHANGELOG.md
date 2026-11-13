@@ -19,7 +19,16 @@ System screen.
   and it creates a token and shows the setup with the server address and token
   already filled in, ready to copy. Hidden for admins and when
   `MCP_ENABLED=false`; `/api/health` now reports `mcp` so the dashboard can
-  tell.
+  tell. Each app gets its own token, named after it, so one can be revoked
+  without touching the others.
+
+### Fixed
+
+- **Setup instructions for Claude Desktop and Claude Code.** Node.js 20.18 is
+  the stated minimum (what the `mcp-remote` helper's dependencies now declare;
+  the instructions said 18), and the Claude Code
+  command now uses `--scope user`: without it the server was registered only
+  for the folder the command happened to be run in.
 
 ## [0.1.17] — 2026-11-12
 

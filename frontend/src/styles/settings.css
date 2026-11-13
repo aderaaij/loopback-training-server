@@ -164,7 +164,8 @@
 .connect-steps li + li {
   margin-top: 5px;
 }
-.connect-snippet {
+/* Doubled class: these override .cli-box, which is declared further down. */
+.cli-box.connect-snippet {
   margin-top: 0;
   max-height: 260px;
   overflow: auto;
