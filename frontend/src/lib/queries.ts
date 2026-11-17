@@ -460,3 +460,22 @@ export function useAcknowledgeFeedback() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['feedback'] }),
   })
 }
+
+// ── liveness ──
+
+export interface Liveness {
+  service: string
+  database: string
+  // Absent on servers older than the flag; treat that as "enabled".
+  mcp?: boolean
+}
+
+/** The unauthenticated health probe, shared by the sidebar status dot and Settings. */
+export function useLiveness() {
+  return useQuery({
+    queryKey: ['liveness'],
+    queryFn: () => api.get<Liveness>('/api/health'),
+    refetchInterval: 60_000,
+    retry: false,
+  })
+}

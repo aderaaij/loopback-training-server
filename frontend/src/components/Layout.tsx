@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query'
 import {
   Bell,
   Brain,
@@ -17,9 +16,8 @@ import {
 import type { Icon } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import { useQueue } from '../lib/queries'
+import { useLiveness, useQueue } from '../lib/queries'
 import { LogoMark } from './LogoMark'
 import { usePageHeaderValue } from './PageHeader'
 import '../styles/layout.css'
@@ -51,12 +49,7 @@ export function Layout() {
   const pending = useQueue('pending', 100, !isAdmin)
   const pendingCount = pending.data?.length ?? 0
 
-  const health = useQuery({
-    queryKey: ['liveness'],
-    queryFn: () => api.get<{ service: string; database: string }>('/api/health'),
-    refetchInterval: 60_000,
-    retry: false,
-  })
+  const health = useLiveness()
   const online = health.isSuccess && health.data.database === 'ok'
   const probing = health.isPending
 
