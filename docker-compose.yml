@@ -70,6 +70,10 @@ services:
       # Coach MCP at /mcp on this same port (on by default). Passes through
       # only when set in the root .env.
       - MCP_ENABLED
+      # Behind a reverse proxy: whose X-Forwarded-For to trust for the client
+      # address (see README "Configuration"). Passes through only when set;
+      # deploy/https/caddy.yml sets it itself.
+      - FORWARDED_ALLOW_IPS
     volumes:
       # Backup dir: the server writes its own pg_dump files here (nightly +
       # pre-migration + on demand from the System screen, which also reports
