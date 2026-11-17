@@ -253,7 +253,12 @@ All endpoints except `/api/health` and `/api/auth/login` require a `Bearer` toke
 | `GET` | `/api/workouts/{id}` | Get workout detail |
 | `GET` | `/api/workouts/{id}/splits` | Get per-split breakdown |
 | `GET` | `/api/workouts/{id}/heartrate` | Get heart rate samples |
+| `PUT` | `/api/workouts/{id}/shoe` | Assign a pair of shoes to a workout (`{"shoeId": null}` takes it off) |
 | `DELETE` | `/api/workouts/{id}` | Delete a workout |
+| `GET` | `/api/shoes` | List pairs of shoes with their mileage (meters), in use first |
+| `POST` | `/api/shoes` | Add a pair (`name`, `startDistance`, `targetDistance`, `isDefault`) |
+| `PATCH` | `/api/shoes/{id}` | Change a pair: rename, set distances, make it the default, retire it |
+| `DELETE` | `/api/shoes/{id}` | Delete a pair (its workouts stay, without a pair) |
 
 ### Training Queue
 

@@ -55,6 +55,7 @@ class WorkoutRead(BaseModel):
     total_energy_burned: float | None
     source: str | None
     plan_workout_id: uuid.UUID | None
+    shoe_id: uuid.UUID | None = None
     effort_score: float | None
     estimated_effort_score: float | None
     data: dict
@@ -74,9 +75,18 @@ class WorkoutList(BaseModel):
     total_energy_burned: float | None
     source: str | None
     plan_workout_id: uuid.UUID | None
+    shoe_id: uuid.UUID | None = None
     effort_score: float | None
     estimated_effort_score: float | None
     created_at: datetime
+
+
+class WorkoutShoeUpdate(BaseModel):
+    """Body of PUT /api/workouts/{id}/shoe. `shoeId: null` takes the pair off."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    shoe_id: uuid.UUID | None = Field(alias="shoeId")
 
 
 class WorkoutContextQueueItem(BaseModel):

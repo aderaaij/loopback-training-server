@@ -24,6 +24,10 @@ class Workout(Base):
     total_energy_burned: Mapped[float | None] = mapped_column(Float, nullable=True)
     source: Mapped[str | None] = mapped_column(String(255), nullable=True)
     plan_workout_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    # The pair worn. Deleting the pair keeps the workout and clears this.
+    shoe_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("shoe.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     effort_score: Mapped[Decimal | None] = mapped_column(Numeric(3, 1), nullable=True)
     estimated_effort_score: Mapped[Decimal | None] = mapped_column(Numeric(3, 1), nullable=True)
     data: Mapped[dict] = mapped_column(JSONB, nullable=False)
