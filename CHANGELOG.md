@@ -14,6 +14,13 @@ System screen.
 
 ### Added
 
+- **Shoe tracking.** Add pairs of shoes with a starting mileage and an
+  optional target (`/api/shoes`), and see the distance on each: the starting
+  mileage plus every workout run in the pair. One pair can be the default,
+  which new runs are assigned to as they sync; any workout can be given a
+  different pair, or none (`PUT /api/workouts/{id}/shoe`). Runs from before a
+  pair was added are not assigned to it, since that distance is what the
+  starting mileage is for. Needs a version of the app with shoe tracking.
 - **Built-in HTTPS for a server with a domain.** Two lines in `.env`
   (`COMPOSE_FILE=docker-compose.yml:deploy/https/caddy.yml` and `DOMAIN=`)
   add a Caddy container that obtains and renews a Let's Encrypt certificate

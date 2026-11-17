@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -9,6 +9,7 @@ from app.database import DbSession
 from app.models.feedback import WorkoutFeedback
 from app.models.plan import Plan
 from app.models.queue import WorkoutQueue
+from app.models.shoe import Shoe
 from app.models.workout import Workout
 from app.routes.queue import _scheduled_date_from_data
 from app.schemas.workout import (
@@ -17,12 +18,33 @@ from app.schemas.workout import (
     WorkoutCreate,
     WorkoutList,
     WorkoutRead,
+    WorkoutShoeUpdate,
     WorkoutSummary,
 )
 from app.tenancy import get_owned
 from app.workout_summary import downsample_timed, round_floats, strip_samples
 
 router = APIRouter()
+
+RUNNING_ACTIVITY = "running"
+
+
+def _default_shoe_id(db: DbSession, user, payload: WorkoutCreate) -> uuid.UUID | None:
+    """The pair a newly arrived run is assigned to: the athlete's default,
+    for runs only. A run from before the pair was added gets nothing, because
+    that distance is already in the pair's starting mileage; without this, a
+    reinstall that re-uploads a year of runs would put them all on it."""
+    if payload.activity_type != RUNNING_ACTIVITY:
+        return None
+    shoe = db.scalars(
+        select(Shoe).where(Shoe.user_id == user.id, Shoe.is_default.is_(True), Shoe.retired_at.is_(None))
+    ).first()
+    if shoe is None:
+        return None
+    started = payload.start_date
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=timezone.utc)
+    return shoe.id if started >= shoe.created_at else None
 
 
 @router.post("", response_model=WorkoutRead, status_code=status.HTTP_201_CREATED)
@@ -42,6 +64,8 @@ def create_workout(payload: WorkoutCreate, db: DbSession, user: CurrentUser):
         existing.effort_score = payload.effort_score
         existing.estimated_effort_score = payload.estimated_effort_score
         existing.data = payload.data
+        # shoe_id is left alone: the app re-uploads workouts, and that must
+        # not undo a pair the athlete picked or took off.
         db.commit()
         db.refresh(existing)
         return existing
@@ -60,6 +84,7 @@ def create_workout(payload: WorkoutCreate, db: DbSession, user: CurrentUser):
         effort_score=payload.effort_score,
         estimated_effort_score=payload.estimated_effort_score,
         data=payload.data,
+        shoe_id=_default_shoe_id(db, user, payload),
     )
     db.add(workout)
     db.commit()
@@ -234,6 +259,20 @@ def get_workout_context(workout_id: uuid.UUID, db: DbSession, user: CurrentUser)
         plan=plan,
         feedback=feedback,
     )
+
+
+@router.put("/{workout_id}/shoe", response_model=WorkoutList)
+def set_workout_shoe(workout_id: uuid.UUID, body: WorkoutShoeUpdate, db: DbSession, user: CurrentUser):
+    """Assign a pair to a workout, or take it off with `shoeId: null`. Any
+    activity type and a retired pair are both fine: this is the athlete
+    correcting the record, not the automatic default."""
+    workout = get_owned(db, Workout, workout_id, user)
+    if body.shoe_id is not None:
+        get_owned(db, Shoe, body.shoe_id, user)  # 404s if the pair isn't the caller's
+    workout.shoe_id = body.shoe_id
+    db.commit()
+    db.refresh(workout)
+    return workout
 
 
 @router.delete("/{workout_id}", status_code=status.HTTP_204_NO_CONTENT)
