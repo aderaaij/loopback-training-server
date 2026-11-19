@@ -116,7 +116,8 @@ async def get_workout_context(workout_id: str) -> dict | list:
                     get_workout_detail return).
 
     Returns:
-        Object with workout_id, plan_workout_id, and three nullable keys:
+        Object with workout_id, plan_workout_id, plan_link_manual, and three
+        nullable keys:
         - queue_item: title, description, activity_type, live status (e.g.
           "completed", "skipped"), scheduled_date, plan_id, the workout_data
           composition that was planned, completed_at.
@@ -126,6 +127,13 @@ async def get_workout_context(workout_id: str) -> dict | list:
 
         All three null (with plan_workout_id null) means an unplanned run —
         that's normal, not an error.
+
+        plan_link_manual true means the athlete linked this workout to the
+        session by hand afterwards (or unlinked it). They are saying it counts
+        for that session, not that they followed it: it may be from another
+        day, another activity, or a different kind of run than prescribed.
+        The session is completed either way; read the workout itself for what
+        was actually done.
 
     Useful when reviewing a completed workout: compare what was planned
     (queue_item.workout_data) against what happened, and see what the athlete

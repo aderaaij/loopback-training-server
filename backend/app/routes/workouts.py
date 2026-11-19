@@ -17,6 +17,7 @@ from app.schemas.workout import (
     WorkoutContextRead,
     WorkoutCreate,
     WorkoutList,
+    WorkoutPlanLinkUpdate,
     WorkoutRead,
     WorkoutShoeUpdate,
     WorkoutSummary,
@@ -60,7 +61,10 @@ def create_workout(payload: WorkoutCreate, db: DbSession, user: CurrentUser):
         existing.total_distance = payload.total_distance
         existing.total_energy_burned = payload.total_energy_burned
         existing.source = payload.source
-        existing.plan_workout_id = payload.plan_workout_id
+        # A link the athlete made or removed by hand outlives a re-upload,
+        # which only carries the app's automatic match.
+        if not existing.plan_link_manual:
+            existing.plan_workout_id = payload.plan_workout_id
         existing.effort_score = payload.effort_score
         existing.estimated_effort_score = payload.estimated_effort_score
         existing.data = payload.data
@@ -220,14 +224,7 @@ def get_workout_heartrate(
     return samples
 
 
-@router.get("/{workout_id}/context", response_model=WorkoutContextRead)
-def get_workout_context(workout_id: uuid.UUID, db: DbSession, user: CurrentUser):
-    """Server-held linkage for a recorded workout: the queue item it fulfilled
-    (via plan_workout_id), the plan behind that item, and any feedback filed
-    against it. Every key is null for a workout that never matched a queued
-    session, so clients can call this unconditionally."""
-    workout = get_owned(db, Workout, workout_id, user)
-
+def _context(db: DbSession, user, workout: Workout) -> WorkoutContextRead:
     queue_item = plan = feedback = None
     if workout.plan_workout_id is not None:
         queue_row = db.scalars(
@@ -255,10 +252,88 @@ def get_workout_context(workout_id: uuid.UUID, db: DbSession, user: CurrentUser)
     return WorkoutContextRead(
         workout_id=workout.id,
         plan_workout_id=workout.plan_workout_id,
+        plan_link_manual=workout.plan_link_manual,
         queue_item=queue_item,
         plan=plan,
         feedback=feedback,
     )
+
+
+@router.get("/{workout_id}/context", response_model=WorkoutContextRead)
+def get_workout_context(workout_id: uuid.UUID, db: DbSession, user: CurrentUser):
+    """Server-held linkage for a recorded workout: the queue item it fulfilled
+    (via plan_workout_id), the plan behind that item, and any feedback filed
+    against it. Every key is null for a workout that never matched a queued
+    session, so clients can call this unconditionally."""
+    return _context(db, user, get_owned(db, Workout, workout_id, user))
+
+
+def _reopen_if_unfulfilled(db: DbSession, user, item_id: uuid.UUID) -> None:
+    """A session that just lost its workout goes back to what it was before
+    one counted for it: skipped if the athlete skipped it, otherwise delivered
+    and not done. A session another workout still fulfils stays completed."""
+    item = db.scalars(
+        select(WorkoutQueue).where(WorkoutQueue.id == item_id, WorkoutQueue.user_id == user.id)
+    ).first()
+    if item is None or item.status != "completed":
+        return
+    still_fulfilled = db.scalars(
+        select(Workout.id).where(Workout.user_id == user.id, Workout.plan_workout_id == item_id)
+    ).first()
+    if still_fulfilled is not None:
+        return
+    skipped = db.scalars(
+        select(WorkoutFeedback.id).where(
+            WorkoutFeedback.user_id == user.id,
+            WorkoutFeedback.workout_id == item_id,
+            WorkoutFeedback.action == "skip",
+            WorkoutFeedback.dismissed.is_(False),
+        )
+    ).first()
+    item.status = "skipped" if skipped is not None else "synced"
+    item.completed_at = None
+
+
+@router.put("/{workout_id}/plan-link", response_model=WorkoutContextRead)
+def set_workout_plan_link(workout_id: uuid.UUID, body: WorkoutPlanLinkUpdate, db: DbSession, user: CurrentUser):
+    """Count a recorded workout for a planned session, or stop counting it
+    with `planWorkoutId: null`. This is the athlete correcting the record, so
+    nothing about the two has to match: not the day, not the activity, not
+    what was prescribed. A skipped session can be linked too.
+
+    Linking completes the session, stamped with the workout's end. A session
+    counts one workout, so whichever workout was linked to it before is
+    unlinked. A session this workout leaves behind is reopened. Either way
+    the link is marked manual and later uploads of the workout leave it alone.
+    """
+    workout = get_owned(db, Workout, workout_id, user)
+    item = get_owned(db, WorkoutQueue, body.plan_workout_id, user) if body.plan_workout_id is not None else None
+    previous_id = workout.plan_workout_id
+
+    if item is not None:
+        displaced = db.scalars(
+            select(Workout).where(
+                Workout.user_id == user.id,
+                Workout.plan_workout_id == item.id,
+                Workout.id != workout.id,
+            )
+        ).all()
+        for other in displaced:
+            other.plan_workout_id = None
+            other.plan_link_manual = True
+        item.status = "completed"
+        item.completed_at = workout.end_date
+
+    workout.plan_workout_id = item.id if item is not None else None
+    workout.plan_link_manual = True
+    db.flush()
+
+    if previous_id is not None and previous_id != workout.plan_workout_id:
+        _reopen_if_unfulfilled(db, user, previous_id)
+
+    db.commit()
+    db.refresh(workout)
+    return _context(db, user, workout)
 
 
 @router.put("/{workout_id}/shoe", response_model=WorkoutList)

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, Numeric, String, Text, func
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, Numeric, String, Text, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,6 +24,9 @@ class Workout(Base):
     total_energy_burned: Mapped[float | None] = mapped_column(Float, nullable=True)
     source: Mapped[str | None] = mapped_column(String(255), nullable=True)
     plan_workout_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    # True once the athlete has linked or unlinked this workout by hand. From
+    # then on plan_workout_id is theirs: an upload no longer writes it.
+    plan_link_manual: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
     # The pair worn. Deleting the pair keeps the workout and clears this.
     shoe_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("shoe.id", ondelete="SET NULL"), nullable=True, index=True

@@ -118,6 +118,9 @@ _HEAD = """\
     3. When querying progress, use get_plan to load context, then get_plan_workouts
        to see scheduled workouts, then cross-reference with recorded workouts via
        plan_workout_id to compute completion rates and planned-vs-actual.
+       A completed session is not always the session as prescribed: the athlete
+       can count any workout for it afterwards (plan_link_manual on the workout),
+       including an easier run or another activity done in its place.
 
     Workflow for creating workouts:
     1. Use create_workout to build a structured workout composition. This queues it
