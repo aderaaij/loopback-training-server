@@ -55,6 +55,7 @@ class WorkoutRead(BaseModel):
     total_energy_burned: float | None
     source: str | None
     plan_workout_id: uuid.UUID | None
+    plan_link_manual: bool = False
     shoe_id: uuid.UUID | None = None
     effort_score: float | None
     estimated_effort_score: float | None
@@ -75,6 +76,7 @@ class WorkoutList(BaseModel):
     total_energy_burned: float | None
     source: str | None
     plan_workout_id: uuid.UUID | None
+    plan_link_manual: bool = False
     shoe_id: uuid.UUID | None = None
     effort_score: float | None
     estimated_effort_score: float | None
@@ -87,6 +89,14 @@ class WorkoutShoeUpdate(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     shoe_id: uuid.UUID | None = Field(alias="shoeId")
+
+
+class WorkoutPlanLinkUpdate(BaseModel):
+    """Body of PUT /api/workouts/{id}/plan-link. `planWorkoutId: null` unlinks."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    plan_workout_id: uuid.UUID | None = Field(alias="planWorkoutId")
 
 
 class WorkoutContextQueueItem(BaseModel):
@@ -133,6 +143,9 @@ class WorkoutContextFeedback(BaseModel):
 class WorkoutContextRead(BaseModel):
     workout_id: uuid.UUID
     plan_workout_id: uuid.UUID | None
+    # The athlete linked (or unlinked) this workout by hand, so the session it
+    # points at may not be the one it was recorded against, or the same kind.
+    plan_link_manual: bool = False
     queue_item: WorkoutContextQueueItem | None
     plan: WorkoutContextPlan | None
     feedback: WorkoutContextFeedback | None

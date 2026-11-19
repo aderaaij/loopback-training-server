@@ -10,6 +10,27 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [Unreleased]
+
+### Added
+
+- **Link a workout to a planned session afterwards.** A run recorded without
+  starting the planned session from the watch, on another day, or as
+  something else than was planned can now be counted for that session
+  (`PUT /api/workouts/{id}/plan-link`, `planWorkoutId: null` to unlink).
+  Linking completes the session, so it counts towards the plan and is no
+  longer reported as missed; unlinking reopens it. A session counts one
+  workout: linking another takes the first one off. A link made or removed
+  by hand is marked `plan_link_manual` on the workout and survives the app
+  re-uploading it. The coach sees the flag in `get_workout_context`. Needs a
+  version of the app with linking.
+
+### Fixed
+
+- `GET /api/workouts/inventory` reports a session as complete when its queue
+  item is completed, not only when the watch says so. The coach's missed-run
+  list is built from it.
+
 ## [0.1.19] — 2026-11-17
 
 ### Added

@@ -7,6 +7,7 @@ from sqlalchemy import delete, select
 from app.auth import CurrentUser
 from app.database import DbSession
 from app.models.inventory import WorkoutInventory
+from app.models.queue import WorkoutQueue
 from app.schemas.inventory import InventoryItem, InventoryItemRead
 
 router = APIRouter()
@@ -74,4 +75,20 @@ def get_inventory(db: DbSession, user: CurrentUser):
         WorkoutInventory.hour,
         WorkoutInventory.minute,
     )
-    return db.scalars(q).all()
+    items = db.scalars(q).all()
+    # The device only knows a run as complete when it was started from the
+    # watch's schedule. A session the athlete linked a workout to afterwards
+    # is completed on the queue item instead, and counts just the same.
+    completed_ids = set(
+        db.scalars(
+            select(WorkoutQueue.id).where(
+                WorkoutQueue.user_id == user.id,
+                WorkoutQueue.status == "completed",
+                WorkoutQueue.id.in_([i.id for i in items]),
+            )
+        )
+    )
+    out = [InventoryItemRead.model_validate(i) for i in items]
+    for row in out:
+        row.complete = row.complete or row.id in completed_ids
+    return out
