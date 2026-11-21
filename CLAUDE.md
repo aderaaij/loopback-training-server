@@ -38,7 +38,7 @@ mcp/
     main.py              # FastMCP server; standalone entry point
     config.py            # MCP settings
     coaching/            # Coaching playbook content (core.md + goals/*.md) + loader
-    tools/               # MCP tool routers (workouts, queue, actions, feedback, health, plans, coaching)
+    tools/               # MCP tool routers (workouts, shoes, queue, actions, feedback, health, plans, coaching)
     services/            # HTTP client for backend API
 ```
 

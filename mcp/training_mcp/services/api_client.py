@@ -135,9 +135,12 @@ class TrainingClient:
         start_after: str | None = None,
         start_before: str | None = None,
         limit: int = 50,
+        shoe_id: str | None = None,
     ) -> list | dict:
         """List workouts with optional filters."""
         params: dict[str, Any] = {"limit": limit}
+        if shoe_id:
+            params["shoe_id"] = shoe_id
         if activity_type:
             params["activity_type"] = activity_type
         if start_after:
@@ -477,6 +480,22 @@ class TrainingClient:
         if timezone:
             params["timezone"] = timezone
         return await self._request("GET", "/api/nutrition/summary", params=params)
+
+    async def list_shoes(self) -> list | dict:
+        """Every pair of shoes with its mileage, in use first."""
+        return await self._request("GET", "/api/shoes")
+
+    async def create_shoe(self, shoe: dict) -> list | dict:
+        """Add a pair of shoes."""
+        return await self._request("POST", "/api/shoes", json=shoe)
+
+    async def update_shoe(self, shoe_id: str, changes: dict) -> list | dict:
+        """Change the fields present in `changes` on a pair."""
+        return await self._request("PATCH", f"/api/shoes/{shoe_id}", json=changes)
+
+    async def set_workout_shoe(self, workout_id: str, shoe_id: str | None) -> list | dict:
+        """Put a pair on a workout, or take it off with None."""
+        return await self._request("PUT", f"/api/workouts/{workout_id}/shoe", json={"shoeId": shoe_id})
 
     async def get_data_consent(self) -> dict:
         """Which data categories this athlete shares with the coach.

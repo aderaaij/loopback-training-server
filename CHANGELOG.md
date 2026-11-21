@@ -10,6 +10,24 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [Unreleased]
+
+### Added
+
+- **The coach can work with the athlete's shoes.** `get_shoes` lists the
+  pairs with the distance on each, the replacement target, the default pair
+  and which are retired. `add_shoe` adds a pair, `update_shoe` renames it,
+  corrects its distances, makes it the default, retires it or brings it back,
+  and `assign_shoe` puts a pair on a workout or takes it off. `get_recent_runs`
+  takes a `shoe_id` to list the runs done in one pair, and `GET /api/workouts`
+  takes the same filter. Deleting a pair stays in the app.
+- **A run knows whether its shoes were checked.** Workouts carry
+  `shoe_confirmed`: false while the pair is still the one assigned
+  automatically, true once it was picked, changed or taken off by hand
+  (`PUT /api/workouts/{id}/shoe`, from the app or the coach). The coach is
+  told to ask about recent unchecked runs when more than one pair is in
+  rotation. Runs from before this version all start unchecked.
+
 ## [0.1.20] — 2026-11-19
 
 ### Added

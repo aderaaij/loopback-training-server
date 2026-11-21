@@ -20,9 +20,11 @@ async def get_recent_runs(
     limit: int = 10,
     start_after: str | None = None,
     start_before: str | None = None,
+    shoe_id: str | None = None,
 ) -> dict | list:
     """
-    List recent workouts, optionally filtered by activity type and date range.
+    List recent workouts, optionally filtered by activity type, date range and
+    the pair of shoes they were done in.
 
     Args:
         activity_type: Filter by activity type (e.g. "running", "cycling", "swimming").
@@ -32,11 +34,19 @@ async def get_recent_runs(
                      Example: "2026-03-01T00:00:00"
         start_before: Only return workouts starting before this datetime (ISO 8601).
                       Example: "2026-03-15T23:59:59"
+        shoe_id: Only return workouts done in this pair of shoes (an id from
+                 get_shoes).
 
     Returns:
         List of workout objects with fields: id, activity_type, start_date, end_date,
         duration, total_distance, total_energy_burned, source, plan_workout_id,
-        effort_score, estimated_effort_score, created_at.
+        shoe_id, shoe_confirmed, effort_score, estimated_effort_score, created_at.
+
+        - shoe_id: the pair of shoes the athlete has on this workout; look it
+          up in get_shoes. Null means no pair was recorded, not barefoot.
+        - shoe_confirmed: false means nobody has checked the pair — the run
+          still has whatever it got automatically (the default pair, or none).
+          See get_shoes for when that is worth asking the athlete about.
 
         - source: the HealthKit bundle id of the recording app —
           "com.apple.health.<UUID>" means recorded directly on the Apple Watch
@@ -63,6 +73,7 @@ async def get_recent_runs(
             start_after=start_after,
             start_before=start_before,
             limit=limit,
+            shoe_id=shoe_id,
         )
     except Exception as e:
         logger.exception(f"Error in get_recent_runs: {e}")
@@ -95,6 +106,10 @@ async def get_workout_detail(workout_id: str) -> dict | list:
         algorithmic RPE estimate 1–10). A large gap between the two can indicate
         non-cardiovascular load (heat, sleep debt, illness, stress) that HR-based
         estimates miss. Treat null as "no signal," not "low effort."
+
+        shoe_id is the pair of shoes on this workout (see get_shoes), or null
+        when none was recorded. shoe_confirmed false means that pair was
+        assigned automatically and nobody has checked it.
     """
     try:
         return await client.get_workout(workout_id, include_samples=False)
