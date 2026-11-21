@@ -48,6 +48,12 @@ _HEAD = """\
     - get_workout_activities: Get the interval/segment breakdown (warmup, work, rest periods)
     - get_training_summary: Get aggregated stats grouped by week/month/year
 
+    Shoe tools (the athlete's running shoes):
+    - get_shoes: List the pairs with the distance on each
+    - add_shoe: Add a pair
+    - update_shoe: Rename a pair, correct its distances, make it the default, retire it or bring it back
+    - assign_shoe: Put a pair on a workout, or take it off
+
     Write tools (training queue → Apple Watch):
     - get_pending_workouts: See what workouts are queued up (pending only)
     - list_queued_workouts: List all queued workouts (any status) — use this to find the UUID of a synced workout for edit/delete actions

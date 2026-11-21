@@ -17,6 +17,7 @@ from training_mcp.tools.nutrition import nutrition_router
 from training_mcp.tools.plan_notes import plan_notes_router
 from training_mcp.tools.plans import plans_router
 from training_mcp.tools.queue import queue_router
+from training_mcp.tools.shoes import shoes_router
 from training_mcp.tools.workouts import workouts_router
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,7 @@ mcp.add_middleware(ConsentMiddleware())
 
 mcp.mount(coaching_router)
 mcp.mount(workouts_router)
+mcp.mount(shoes_router)
 mcp.mount(queue_router)
 mcp.mount(actions_router)
 mcp.mount(feedback_router)

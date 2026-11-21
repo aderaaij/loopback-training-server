@@ -68,8 +68,9 @@ def create_workout(payload: WorkoutCreate, db: DbSession, user: CurrentUser):
         existing.effort_score = payload.effort_score
         existing.estimated_effort_score = payload.estimated_effort_score
         existing.data = payload.data
-        # shoe_id is left alone: the app re-uploads workouts, and that must
-        # not undo a pair the athlete picked or took off.
+        # shoe_id and shoe_confirmed are left alone: the app re-uploads
+        # workouts, and that must not undo a pair the athlete picked or took
+        # off, nor forget that they did.
         db.commit()
         db.refresh(existing)
         return existing
@@ -104,6 +105,7 @@ def list_workouts(
     start_after: datetime | None = None,
     start_before: datetime | None = None,
     plan_workout_id: uuid.UUID | None = None,
+    shoe_id: uuid.UUID | None = None,
     limit: int = Query(default=50, le=200),
     offset: int = 0,
 ):
@@ -117,6 +119,8 @@ def list_workouts(
         q = q.where(Workout.start_date <= start_before)
     if plan_workout_id:
         q = q.where(Workout.plan_workout_id == plan_workout_id)
+    if shoe_id:
+        q = q.where(Workout.shoe_id == shoe_id)
 
     q = q.offset(offset).limit(limit)
     return db.scalars(q).all()
@@ -340,11 +344,14 @@ def set_workout_plan_link(workout_id: uuid.UUID, body: WorkoutPlanLinkUpdate, db
 def set_workout_shoe(workout_id: uuid.UUID, body: WorkoutShoeUpdate, db: DbSession, user: CurrentUser):
     """Assign a pair to a workout, or take it off with `shoeId: null`. Any
     activity type and a retired pair are both fine: this is the athlete
-    correcting the record, not the automatic default."""
+    correcting the record, not the automatic default. Either way the pair
+    counts as checked from here on, including when it is set to the one the
+    workout already had."""
     workout = get_owned(db, Workout, workout_id, user)
     if body.shoe_id is not None:
         get_owned(db, Shoe, body.shoe_id, user)  # 404s if the pair isn't the caller's
     workout.shoe_id = body.shoe_id
+    workout.shoe_confirmed = True
     db.commit()
     db.refresh(workout)
     return workout

@@ -174,3 +174,38 @@ def test_needs_a_token():
     from app.main import app
 
     assert TestClient(app).get(SHOES).status_code in (401, 403)
+
+
+def test_workouts_can_be_listed_by_pair(client_a, client_b):
+    pair = make_shoe(client_a, isDefault=True)
+    in_pair = make_workout(client_a)
+    make_workout(client_a, activity="walking")
+
+    listed = client_a.get("/api/workouts", params={"shoe_id": pair["id"]}).json()
+    assert [w["id"] for w in listed] == [in_pair["id"]]
+
+    # Another athlete asking for the same pair sees nothing of it.
+    assert client_b.get("/api/workouts", params={"shoe_id": pair["id"]}).json() == []
+
+
+def test_an_automatic_pair_is_unchecked_until_someone_sets_it(client_a):
+    pair = make_shoe(client_a, isDefault=True)
+    run = make_workout(client_a)
+    assert run["shoe_confirmed"] is False
+
+    # Setting the pair it already has is how "yes, that one" is recorded.
+    r = client_a.put(f"/api/workouts/{run['id']}/shoe", json={"shoeId": pair["id"]})
+    assert r.json()["shoe_confirmed"] is True
+
+    # A re-upload of the same workout does not forget it.
+    again = make_workout(client_a, workout_id=run["id"])
+    assert again["shoe_confirmed"] is True
+    assert again["shoe_id"] == pair["id"]
+
+
+def test_taking_the_pair_off_counts_as_checked(client_a):
+    make_shoe(client_a, isDefault=True)
+    run = make_workout(client_a)
+    r = client_a.put(f"/api/workouts/{run['id']}/shoe", json={"shoeId": None})
+    assert r.json()["shoe_id"] is None
+    assert r.json()["shoe_confirmed"] is True

@@ -31,6 +31,9 @@ class Workout(Base):
     shoe_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("shoe.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    # Set once someone picked, changed or took off the pair by hand. False
+    # means shoe_id is still whatever the automatic default made it.
+    shoe_confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
     effort_score: Mapped[Decimal | None] = mapped_column(Numeric(3, 1), nullable=True)
     estimated_effort_score: Mapped[Decimal | None] = mapped_column(Numeric(3, 1), nullable=True)
     data: Mapped[dict] = mapped_column(JSONB, nullable=False)

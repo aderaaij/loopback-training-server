@@ -57,6 +57,7 @@ class WorkoutRead(BaseModel):
     plan_workout_id: uuid.UUID | None
     plan_link_manual: bool = False
     shoe_id: uuid.UUID | None = None
+    shoe_confirmed: bool = False
     effort_score: float | None
     estimated_effort_score: float | None
     data: dict
@@ -78,6 +79,7 @@ class WorkoutList(BaseModel):
     plan_workout_id: uuid.UUID | None
     plan_link_manual: bool = False
     shoe_id: uuid.UUID | None = None
+    shoe_confirmed: bool = False
     effort_score: float | None
     estimated_effort_score: float | None
     created_at: datetime
