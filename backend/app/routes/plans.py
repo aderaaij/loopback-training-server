@@ -88,7 +88,11 @@ def _is_finishable(plan: Plan, progress: PlanProgress, today: date) -> bool:
     """An active plan that looks done: its window has passed, or every session
     (queued run or scheduled strength day) is retired, with at least one
     actually completed — a fully-skipped plan the day it's created shouldn't
-    celebrate."""
+    celebrate.
+
+    An empty queue only counts once the end date is reached. A plan filled in
+    a week at a time has every session done at the end of each week, months
+    before it is over."""
     if plan.status != "active" or plan.start_date > today:
         return False
     window_over = plan.end_date is not None and plan.end_date < today
@@ -97,7 +101,8 @@ def _is_finishable(plan: Plan, progress: PlanProgress, today: date) -> bool:
         and progress.runs_remaining == 0
         and progress.runs_completed > 0
     )
-    return window_over or all_runs_done
+    ends_later = plan.end_date is not None and plan.end_date > today
+    return window_over or (all_runs_done and not ends_later)
 
 
 def _plan_read(plan: Plan, progress: PlanProgress, today: date) -> PlanRead:

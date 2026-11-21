@@ -93,7 +93,9 @@ async def get_plan(plan_id: str) -> dict | list:
           date passed with no match, remaining otherwise. (The runs_* field
           names predate strength support; they count sessions of either kind.)
         - finishable: true when an active plan looks done (window passed, or
-          every session retired with ≥1 completed). Nothing auto-completes;
+          every session retired with ≥1 completed and no end date still
+          ahead — a plan queued a week at a time is not done each time its
+          queue runs empty). Nothing auto-completes;
           if true, offer the athlete a wrap-up (complete_plan on the dashboard
           or update_plan status="completed").
     """

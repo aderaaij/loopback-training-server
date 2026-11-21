@@ -68,6 +68,23 @@ def test_all_runs_done_is_finishable(client_a):
     }
 
 
+def test_all_runs_done_before_the_end_date_is_not_finishable(client_a):
+    """Planned a week at a time: this week's sessions are done, the plan has
+    months to go."""
+    pid = make_plan(client_a, start=TODAY - timedelta(days=5), end=TODAY + timedelta(weeks=21))
+    add_run(client_a, pid, "completed")
+    add_run(client_a, pid, "completed")
+    plan = fetch_plan(client_a, pid)
+    assert plan["progress"]["runs_remaining"] == 0
+    assert plan["finishable"] is False
+
+
+def test_all_runs_done_without_an_end_date_is_finishable(client_a):
+    pid = make_plan(client_a)
+    add_run(client_a, pid, "completed")
+    assert fetch_plan(client_a, pid)["finishable"] is True
+
+
 def test_pending_run_blocks_finishable(client_a):
     pid = make_plan(client_a, end=TODAY)
     add_run(client_a, pid, "completed")

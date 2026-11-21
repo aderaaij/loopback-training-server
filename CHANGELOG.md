@@ -10,6 +10,15 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [Unreleased]
+
+### Fixed
+
+- A plan is no longer offered as complete when every queued session is done
+  but its end date is still ahead. A plan that is filled in a week at a time
+  was reported `finishable` at the end of each week. A plan past its end
+  date, or without one and with every session done, is offered as before.
+
 ## [0.1.21] — 2026-11-21
 
 ### Added
