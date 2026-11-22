@@ -36,6 +36,15 @@ class Workout(Base):
     shoe_confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
     effort_score: Mapped[Decimal | None] = mapped_column(Numeric(3, 1), nullable=True)
     estimated_effort_score: Mapped[Decimal | None] = mapped_column(Numeric(3, 1), nullable=True)
+    # Heart rate (bpm) as the workout ended, and one and two minutes later.
+    # The drop between them is the recovery figure. All null when the watch
+    # recorded nothing usable after the end.
+    end_heart_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    heart_rate_after_1min: Mapped[float | None] = mapped_column(Float, nullable=True)
+    heart_rate_after_2min: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # The VO2 max estimate (mL/kg/min) Health recorded for this workout. A
+    # `body` figure under data consent, like the daily one.
+    vo2_max: Mapped[float | None] = mapped_column(Float, nullable=True)
     data: Mapped[dict] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

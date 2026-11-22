@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 
 from app.auth import CurrentUser
+from app.data_consent import BODY, ConsentScope, CurrentConsent
 from app.database import DbSession
 from app.models.feedback import WorkoutFeedback
 from app.models.plan import Plan
@@ -48,6 +49,18 @@ def _default_shoe_id(db: DbSession, user, payload: WorkoutCreate) -> uuid.UUID |
     return shoe.id if started >= shoe.created_at else None
 
 
+def _for_coach(workout: Workout, consent: ConsentScope, schema):
+    """The workout as this caller may see it. Workouts are always shared, but
+    VO2 max is a `body` figure: a coach-scoped read by an athlete who withholds
+    `body` gets the workout with it blanked, the same choice that hides the
+    daily figure."""
+    if consent.allows(BODY):
+        return workout
+    read = schema.model_validate(workout)
+    read.vo2_max = None
+    return read
+
+
 @router.post("", response_model=WorkoutRead, status_code=status.HTTP_201_CREATED)
 def create_workout(payload: WorkoutCreate, db: DbSession, user: CurrentUser):
     existing = db.get(Workout, payload.id)
@@ -67,6 +80,10 @@ def create_workout(payload: WorkoutCreate, db: DbSession, user: CurrentUser):
             existing.plan_workout_id = payload.plan_workout_id
         existing.effort_score = payload.effort_score
         existing.estimated_effort_score = payload.estimated_effort_score
+        existing.end_heart_rate = payload.end_heart_rate
+        existing.heart_rate_after_1min = payload.heart_rate_after_1min
+        existing.heart_rate_after_2min = payload.heart_rate_after_2min
+        existing.vo2_max = payload.vo2_max
         existing.data = payload.data
         # shoe_id and shoe_confirmed are left alone: the app re-uploads
         # workouts, and that must not undo a pair the athlete picked or took
@@ -88,6 +105,10 @@ def create_workout(payload: WorkoutCreate, db: DbSession, user: CurrentUser):
         plan_workout_id=payload.plan_workout_id,
         effort_score=payload.effort_score,
         estimated_effort_score=payload.estimated_effort_score,
+        end_heart_rate=payload.end_heart_rate,
+        heart_rate_after_1min=payload.heart_rate_after_1min,
+        heart_rate_after_2min=payload.heart_rate_after_2min,
+        vo2_max=payload.vo2_max,
         data=payload.data,
         shoe_id=_default_shoe_id(db, user, payload),
     )
@@ -101,6 +122,7 @@ def create_workout(payload: WorkoutCreate, db: DbSession, user: CurrentUser):
 def list_workouts(
     db: DbSession,
     user: CurrentUser,
+    consent: CurrentConsent,
     activity_type: str | None = None,
     start_after: datetime | None = None,
     start_before: datetime | None = None,
@@ -123,7 +145,7 @@ def list_workouts(
         q = q.where(Workout.shoe_id == shoe_id)
 
     q = q.offset(offset).limit(limit)
-    return db.scalars(q).all()
+    return [_for_coach(w, consent, WorkoutList) for w in db.scalars(q).all()]
 
 
 @router.get("/summary", response_model=list[WorkoutSummary])
@@ -187,6 +209,7 @@ def get_workout(
     workout_id: uuid.UUID,
     db: DbSession,
     user: CurrentUser,
+    consent: CurrentConsent,
     include_samples: bool = True,
 ):
     """Full workout detail. With `include_samples=false` the raw sample
@@ -195,8 +218,10 @@ def get_workout(
     is rounded away — root columns included, not just the blob."""
     workout = get_owned(db, Workout, workout_id, user)
     if include_samples:
-        return workout
+        return _for_coach(workout, consent, WorkoutRead)
     read = WorkoutRead.model_validate(workout)
+    if not consent.allows(BODY):
+        read.vo2_max = None
     read.data = strip_samples(read.data)
     # The ORM float columns carry the same double-precision noise as the blob.
     for name, value in list(read):
@@ -341,7 +366,9 @@ def set_workout_plan_link(workout_id: uuid.UUID, body: WorkoutPlanLinkUpdate, db
 
 
 @router.put("/{workout_id}/shoe", response_model=WorkoutList)
-def set_workout_shoe(workout_id: uuid.UUID, body: WorkoutShoeUpdate, db: DbSession, user: CurrentUser):
+def set_workout_shoe(
+    workout_id: uuid.UUID, body: WorkoutShoeUpdate, db: DbSession, user: CurrentUser, consent: CurrentConsent
+):
     """Assign a pair to a workout, or take it off with `shoeId: null`. Any
     activity type and a retired pair are both fine: this is the athlete
     correcting the record, not the automatic default. Either way the pair
@@ -354,7 +381,7 @@ def set_workout_shoe(workout_id: uuid.UUID, body: WorkoutShoeUpdate, db: DbSessi
     workout.shoe_confirmed = True
     db.commit()
     db.refresh(workout)
-    return workout
+    return _for_coach(workout, consent, WorkoutList)
 
 
 @router.delete("/{workout_id}", status_code=status.HTTP_204_NO_CONTENT)

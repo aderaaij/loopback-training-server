@@ -9,6 +9,7 @@ _KNOWN_FIELDS = {
     "id", "activityType", "startDate", "endDate",
     "duration", "totalDistance", "totalEnergyBurned", "source", "data",
     "planWorkoutId", "effortScore", "estimatedEffortScore",
+    "endHeartRate", "heartRateAfter1Min", "heartRateAfter2Min", "vo2Max",
 }
 
 
@@ -26,6 +27,10 @@ class WorkoutCreate(BaseModel):
     plan_workout_id: uuid.UUID | None = Field(default=None, alias="planWorkoutId")
     effort_score: float | None = Field(default=None, alias="effortScore", ge=1, le=10)
     estimated_effort_score: float | None = Field(default=None, alias="estimatedEffortScore", ge=1, le=10)
+    end_heart_rate: float | None = Field(default=None, alias="endHeartRate", gt=0, le=300)
+    heart_rate_after_1min: float | None = Field(default=None, alias="heartRateAfter1Min", gt=0, le=300)
+    heart_rate_after_2min: float | None = Field(default=None, alias="heartRateAfter2Min", gt=0, le=300)
+    vo2_max: float | None = Field(default=None, alias="vo2Max", gt=0, le=120)
     data: dict = Field(default_factory=dict)
 
     @model_validator(mode="before")
@@ -60,6 +65,10 @@ class WorkoutRead(BaseModel):
     shoe_confirmed: bool = False
     effort_score: float | None
     estimated_effort_score: float | None
+    end_heart_rate: float | None = None
+    heart_rate_after_1min: float | None = None
+    heart_rate_after_2min: float | None = None
+    vo2_max: float | None = None
     data: dict
     created_at: datetime
     updated_at: datetime
@@ -82,6 +91,10 @@ class WorkoutList(BaseModel):
     shoe_confirmed: bool = False
     effort_score: float | None
     estimated_effort_score: float | None
+    end_heart_rate: float | None = None
+    heart_rate_after_1min: float | None = None
+    heart_rate_after_2min: float | None = None
+    vo2_max: float | None = None
     created_at: datetime
 
 
