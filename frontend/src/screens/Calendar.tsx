@@ -5,6 +5,7 @@ import { ConflictPill, ErrorNote, Loading, SectionLabel, StatusPill } from '../c
 import { addDays, startOfWeek, toDateKey, todayKey } from '../lib/format'
 import { useCalendar } from '../lib/queries'
 import type { CalendarEntry } from '../lib/types'
+import { useWeekStart } from '../lib/weekStart'
 import '../styles/screens.css'
 
 const MONTH_NAMES = [
@@ -21,8 +22,10 @@ const MONTH_NAMES = [
   'November',
   'December',
 ]
+// Monday-first; rotated to Sunday-first when the athlete's week starts on Sunday.
 const DOW_SHORT = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 const DOW_LONG = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
+const sundayFirst = (days: string[]) => [days[6], ...days.slice(0, 6)]
 
 function eventStyle(e: CalendarEntry): { bg: string; col: string } {
   if (e.kind === 'run') {
@@ -36,19 +39,22 @@ export function Calendar() {
 
   const [view, setView] = useState<'month' | 'week'>('month')
   const [anchor, setAnchor] = useState(() => new Date())
+  const weekStart = useWeekStart()
+  const dowShort = weekStart === 'sunday' ? sundayFirst(DOW_SHORT) : DOW_SHORT
+  const dowLong = weekStart === 'sunday' ? sundayFirst(DOW_LONG) : DOW_LONG
 
-  // Visible range: month grid (Mon-start, 6 rows max) or single week.
+  // Visible range: month grid (starts on the athlete's week start, 6 rows max) or single week.
   const range = useMemo(() => {
     if (view === 'week') {
-      const start = startOfWeek(anchor)
+      const start = startOfWeek(anchor, weekStart)
       return { start, end: addDays(start, 6) }
     }
     const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1)
-    const gridStart = startOfWeek(first)
+    const gridStart = startOfWeek(first, weekStart)
     const last = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0)
-    const gridEnd = addDays(startOfWeek(last), 6)
+    const gridEnd = addDays(startOfWeek(last, weekStart), 6)
     return { start: gridStart, end: gridEnd }
-  }, [view, anchor])
+  }, [view, anchor, weekStart])
 
   const { data, isLoading, error } = useCalendar(toDateKey(range.start), toDateKey(range.end))
 
@@ -71,12 +77,12 @@ export function Calendar() {
   }, [range, anchor])
 
   const weekDays = useMemo(() => {
-    const start = startOfWeek(view === 'week' ? anchor : new Date())
+    const start = startOfWeek(view === 'week' ? anchor : new Date(), weekStart)
     return Array.from({ length: 7 }, (_, i) => {
       const date = addDays(start, i)
       return { date, key: toDateKey(date) }
     })
-  }, [view, anchor])
+  }, [view, anchor, weekStart])
 
   const step = (dir: 1 | -1) => {
     setAnchor((a) =>
@@ -132,7 +138,7 @@ export function Calendar() {
             </div>
           </div>
           <div className="cal-dow-row">
-            {DOW_SHORT.map((d, i) => (
+            {dowShort.map((d, i) => (
               <span key={i}>{d}</span>
             ))}
           </div>
@@ -203,7 +209,7 @@ export function Calendar() {
               return (
                 <div className="week-row" key={key} style={{ cursor: 'default' }}>
                   <div className="wr-date">
-                    <div className="wr-dow">{DOW_LONG[i]}</div>
+                    <div className="wr-dow">{dowLong[i]}</div>
                     <div className="wr-day" style={{ color: isToday ? 'var(--accent)' : 'var(--disabled)' }}>
                       {date.getDate()}
                     </div>
@@ -223,7 +229,7 @@ export function Calendar() {
               return (
                 <div className="week-row" key={`${key}-${j}`} style={{ cursor: 'default' }}>
                   <div className="wr-date" style={{ visibility: j === 0 ? 'visible' : 'hidden' }}>
-                    <div className="wr-dow">{DOW_LONG[i]}</div>
+                    <div className="wr-dow">{dowLong[i]}</div>
                     <div className="wr-day" style={{ color: isToday ? 'var(--accent)' : 'var(--text)' }}>
                       {date.getDate()}
                     </div>

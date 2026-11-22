@@ -10,6 +10,7 @@ import type { CoachClientId } from '../lib/coachSetup'
 import { useChangePassword, useLiveness, useMe, useMintToken, useRevokeToken } from '../lib/queries'
 import type { ApiTokenInfo } from '../lib/types'
 import { setUnits, useUnits } from '../lib/units'
+import { setWeekStart, useWeekStart } from '../lib/weekStart'
 import '../styles/settings.css'
 
 const MIN_PASSWORD = 8
@@ -372,6 +373,7 @@ export function Settings() {
   const { data, isLoading, error } = useMe()
   const revoke = useRevokeToken()
   const units = useUnits()
+  const weekStart = useWeekStart()
   const [revoking, setRevoking] = useState<ApiTokenInfo | null>(null)
   const [confirmLogout, setConfirmLogout] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
@@ -424,6 +426,28 @@ export function Settings() {
           </button>
           <button className={units === 'imperial' ? 'on' : ''} onClick={() => setUnits('imperial')}>
             Imperial
+          </button>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <SectionLabel>Calendar</SectionLabel>
+      </div>
+      <div className="profile-card">
+        <div style={{ flex: 1, minWidth: 160 }}>
+          <div className="display" style={{ fontSize: 16, fontWeight: 600 }}>
+            Week starts on
+          </div>
+          <div className="mono-meta" style={{ marginTop: 3 }}>
+            first day of the week on the calendar
+          </div>
+        </div>
+        <div className="seg-toggle">
+          <button className={weekStart === 'monday' ? 'on' : ''} onClick={() => setWeekStart('monday')}>
+            Monday
+          </button>
+          <button className={weekStart === 'sunday' ? 'on' : ''} onClick={() => setWeekStart('sunday')}>
+            Sunday
           </button>
         </div>
       </div>

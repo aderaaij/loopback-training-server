@@ -10,6 +10,16 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [Unreleased]
+
+### Added
+
+- **The calendar can start its weeks on Sunday.** Settings has a new "Week
+  starts on" choice (Monday / Sunday), and the dashboard calendar's month
+  grid, week view and weekday labels follow it. Like units, it is stored per
+  user (`GET`/`PUT /api/me/week-start`), so it follows the athlete across
+  browsers. Unset means Monday, so existing installs look exactly as before.
+
 ## [0.1.22] — 2026-11-21
 
 ### Fixed

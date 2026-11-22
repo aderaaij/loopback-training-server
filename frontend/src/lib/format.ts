@@ -1,4 +1,5 @@
 import type { Units } from './units'
+import type { WeekStart } from './weekStart'
 
 /**
  * Formatting helpers. Backend units: duration seconds, distance meters, pace
@@ -216,9 +217,10 @@ export function addDays(d: Date, days: number): Date {
   return out
 }
 
-/** Monday of the week containing d. */
-export function startOfWeek(d: Date): Date {
+/** First day (Monday by default, or Sunday) of the week containing d. */
+export function startOfWeek(d: Date, weekStart: WeekStart = 'monday'): Date {
   const out = new Date(d.getFullYear(), d.getMonth(), d.getDate())
-  out.setDate(out.getDate() - ((out.getDay() + 6) % 7))
+  const offset = weekStart === 'sunday' ? out.getDay() : (out.getDay() + 6) % 7
+  out.setDate(out.getDate() - offset)
   return out
 }
