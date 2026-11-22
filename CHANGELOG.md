@@ -10,6 +10,16 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [Unreleased]
+
+### Changed
+
+- On the calendar's month grid, a day where a run and a strength session
+  collide is now marked with a small warning icon next to the day number
+  instead of an amber border, which looked too much like today's highlight.
+  Today is the only cell with a highlighted border. The legend shows the
+  same icon.
+
 ## [0.1.22] — 2026-11-21
 
 ### Fixed
