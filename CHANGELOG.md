@@ -10,6 +10,16 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [Unreleased]
+
+### Changed
+
+- Calendar entries show how each session went instead of striking through
+  completed ones. A completed session gets a check, a missed one (scheduled
+  before today, neither completed nor skipped) gets an ✗, and only a skipped
+  session is struck through. The "This week" list says missed and skipped the
+  same way. A session scheduled today is never shown as missed.
+
 ## [0.1.22] — 2026-11-21
 
 ### Fixed
