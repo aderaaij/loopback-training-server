@@ -1,6 +1,6 @@
 """Self-service endpoints operating on the token's own user.
 
-Data consent and the display-units preference. camelCase on the wire like the other
+Data consent and the display preferences (units, week start). camelCase on the wire like the other
 identity-shaped routes (auth, admin), not the snake_case of the data routes.
 """
 
@@ -54,6 +54,19 @@ class UnitsOut(_CamelModel):
     updated_at: datetime | None
 
 
+WeekStart = Literal["monday", "sunday"]
+
+
+class WeekStartUpdate(_CamelModel):
+    week_start: WeekStart
+
+
+class WeekStartOut(_CamelModel):
+    # null = never chosen; clients read it as Monday, the pre-setting behavior.
+    week_start: WeekStart | None
+    updated_at: datetime | None
+
+
 def _out(user) -> DataConsentOut:
     domains, updated_at, reported_at = consent_state(user)
     return DataConsentOut(domains=domains, updated_at=updated_at, reported_at=reported_at)
@@ -68,6 +81,7 @@ def _out(user) -> DataConsentOut:
 # would keep seeing the same 405 forever and have no way to tell why.
 _PATHS = ("/data-consent", "/data-consent/")
 _UNITS_PATHS = ("/units", "/units/")
+_WEEK_START_PATHS = ("/week-start", "/week-start/")
 
 
 @router.get(_PATHS[0], response_model=DataConsentOut)
@@ -149,3 +163,30 @@ def put_units(body: UnitsUpdate, db: DbSession, user: CurrentUser) -> UnitsOut:
         db.commit()
         db.refresh(user)
     return UnitsOut(units=user.units, updated_at=user.units_updated_at)
+
+
+@router.get(_WEEK_START_PATHS[0], response_model=WeekStartOut)
+@router.get(_WEEK_START_PATHS[1], response_model=WeekStartOut, include_in_schema=False)
+def get_week_start(user: CurrentUser) -> WeekStartOut:
+    """The day this user's calendar weeks start on.
+
+    Display only: the dashboard calendar follows it. null means never chosen,
+    which clients read as Monday.
+    """
+    return WeekStartOut(week_start=user.week_start, updated_at=user.week_start_updated_at)
+
+
+@router.put(_WEEK_START_PATHS[0], response_model=WeekStartOut)
+@router.put(_WEEK_START_PATHS[1], response_model=WeekStartOut, include_in_schema=False)
+def put_week_start(body: WeekStartUpdate, db: DbSession, user: CurrentUser) -> WeekStartOut:
+    """Set the preference.
+
+    Same contract as units: a closed vocabulary (anything else is a 422), and
+    `updatedAt` moves only when the value changes.
+    """
+    if user.week_start != body.week_start or user.week_start_updated_at is None:
+        user.week_start = body.week_start
+        user.week_start_updated_at = func.now()
+        db.commit()
+        db.refresh(user)
+    return WeekStartOut(week_start=user.week_start, updated_at=user.week_start_updated_at)

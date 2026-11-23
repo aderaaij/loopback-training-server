@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { api, authStorage, setUnauthorizedHandler } from './api'
 import type { AuthUser, LoginResponse } from './types'
 import { clearUnits, syncUnits } from './units'
+import { clearWeekStart, syncWeekStart } from './weekStart'
 
 interface AuthState {
   user: AuthUser | null
@@ -26,15 +27,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const reset = useCallback(() => {
     authStorage.clear()
     clearUnits()
+    clearWeekStart()
     setUser(null)
     setTokenId(null)
   }, [])
 
-  // Units belong to the account: fetch them whenever a session appears, on
-  // page load or after login.
+  // Units and week start belong to the account: fetch them whenever a session
+  // appears, on page load or after login.
   const userId = user?.id
   useEffect(() => {
-    if (userId) void syncUnits()
+    if (!userId) return
+    void syncUnits()
+    void syncWeekStart()
   }, [userId])
 
   useEffect(() => {

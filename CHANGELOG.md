@@ -12,6 +12,14 @@ System screen.
 
 ## [Unreleased]
 
+### Added
+
+- **The calendar can start its weeks on Sunday.** Settings has a new "Week
+  starts on" choice (Monday / Sunday), and the dashboard calendar's month
+  grid, week view and weekday labels follow it. Like units, it is stored per
+  user (`GET`/`PUT /api/me/week-start`), so it follows the athlete across
+  browsers. Unset means Monday, so existing installs look exactly as before.
+
 ### Changed
 
 - Calendar entries show how each session went instead of striking through

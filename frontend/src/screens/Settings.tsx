@@ -9,10 +9,38 @@ import { COACH_CLIENTS, buildCoachSetup, coachUrl } from '../lib/coachSetup'
 import type { CoachClientId } from '../lib/coachSetup'
 import { useChangePassword, useLiveness, useMe, useMintToken, useRevokeToken } from '../lib/queries'
 import type { ApiTokenInfo } from '../lib/types'
-import { setUnits, useUnits } from '../lib/units'
+import { UNITS, type Units, setUnits, useUnits } from '../lib/units'
+import { WEEK_STARTS, type WeekStart, setWeekStart, useWeekStart } from '../lib/weekStart'
 import '../styles/settings.css'
 
 const MIN_PASSWORD = 8
+
+// One label per value, typed by the value list, so a value can't be added without one.
+const UNIT_LABELS: Record<Units, string> = { metric: 'Metric', imperial: 'Imperial' }
+const WEEK_START_LABELS: Record<WeekStart, string> = { monday: 'Monday', sunday: 'Sunday' }
+
+/** A segmented choice between a preference's values. */
+function PreferenceToggle<T extends string>({
+  values,
+  labels,
+  value,
+  onChange,
+}: {
+  values: readonly T[]
+  labels: Record<T, string>
+  value: T
+  onChange: (value: T) => void
+}) {
+  return (
+    <div className="seg-toggle">
+      {values.map((v) => (
+        <button key={v} className={value === v ? 'on' : ''} onClick={() => onChange(v)}>
+          {labels[v]}
+        </button>
+      ))}
+    </div>
+  )
+}
 
 function tokenIcon(name: string): Icon {
   const n = name.toLowerCase()
@@ -372,6 +400,7 @@ export function Settings() {
   const { data, isLoading, error } = useMe()
   const revoke = useRevokeToken()
   const units = useUnits()
+  const weekStart = useWeekStart()
   const [revoking, setRevoking] = useState<ApiTokenInfo | null>(null)
   const [confirmLogout, setConfirmLogout] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
@@ -418,14 +447,22 @@ export function Settings() {
             {units === 'imperial' ? 'miles, min/mi, lb' : 'kilometers, min/km, kg'} · also used by the app and your coach
           </div>
         </div>
-        <div className="seg-toggle">
-          <button className={units === 'metric' ? 'on' : ''} onClick={() => setUnits('metric')}>
-            Metric
-          </button>
-          <button className={units === 'imperial' ? 'on' : ''} onClick={() => setUnits('imperial')}>
-            Imperial
-          </button>
+        <PreferenceToggle values={UNITS} labels={UNIT_LABELS} value={units} onChange={setUnits} />
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <SectionLabel>Calendar</SectionLabel>
+      </div>
+      <div className="profile-card">
+        <div style={{ flex: 1, minWidth: 160 }}>
+          <div className="display" style={{ fontSize: 16, fontWeight: 600 }}>
+            Week starts on
+          </div>
+          <div className="mono-meta" style={{ marginTop: 3 }}>
+            first day of the week on the calendar
+          </div>
         </div>
+        <PreferenceToggle values={WEEK_STARTS} labels={WEEK_START_LABELS} value={weekStart} onChange={setWeekStart} />
       </div>
 
       {canConnectCoach && (

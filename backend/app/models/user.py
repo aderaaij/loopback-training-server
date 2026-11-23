@@ -46,6 +46,12 @@ class User(Base):
     units: Mapped[str | None] = mapped_column(String(16), nullable=True)
     units_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # First day of the week on the dashboard calendar: "monday" or "sunday".
+    # NULL = never chosen, which clients read as Monday, so installs that
+    # predate the setting look exactly as they did. Display only.
+    week_start: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    week_start_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     tokens: Mapped[list["ApiToken"]] = relationship(  # noqa: F821
         "ApiToken", back_populates="user", cascade="all, delete-orphan"
     )
