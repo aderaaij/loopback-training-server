@@ -379,6 +379,20 @@ class TrainingClient:
         """Set (replace) a plan's recurring weekly schedule."""
         return await self._request("PUT", f"/api/plans/{plan_id}/schedule", json=schedule)
 
+    async def add_plan_schedule_session(self, plan_id: str, session: dict) -> list | dict:
+        """Add one strength session on its own date."""
+        return await self._request("POST", f"/api/plans/{plan_id}/schedule/sessions", json=session)
+
+    async def remove_plan_schedule_session(self, plan_id: str, day: str) -> list | dict:
+        """Take the session(s) on one date off a plan's schedule."""
+        return await self._request("DELETE", f"/api/plans/{plan_id}/schedule/sessions/{day}")
+
+    async def move_plan_schedule_session(self, plan_id: str, day: str, to: str) -> list | dict:
+        """Move the session(s) on one date to another date."""
+        return await self._request(
+            "POST", f"/api/plans/{plan_id}/schedule/sessions/{day}/move", json={"to": to}
+        )
+
     async def clear_plan_schedule(self, plan_id: str) -> list | dict:
         """Remove a plan's recurring schedule."""
         return await self._request("DELETE", f"/api/plans/{plan_id}/schedule")

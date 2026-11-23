@@ -212,6 +212,12 @@ async def set_strength_schedule(
     """Set a recurring weekly schedule on a plan — which routine runs on which
     weekday, for a number of weeks.
 
+    Only for an athlete who lifts on fixed weekdays. One who fits strength
+    around the rest of the week has no "every Tuesday": give them individual
+    sessions with `add_strength_session` instead, and skip this tool. The two
+    also combine: a weekly pattern, with `move_strength_session` or
+    `remove_strength_session` for the weeks that differ.
+
     Use this for strength / Hevy cycles: the schedule references Hevy routines
     by id + title (get them from the hevy-mcp first). These sessions are plan
     markers only — they are NOT pushed to the Apple Watch (that's for running
@@ -260,8 +266,102 @@ async def set_strength_schedule(
 
 @plans_router.tool
 @text_result
+async def add_strength_session(
+    plan_id: str,
+    date: str,
+    title: str,
+    routine_id: str | None = None,
+) -> dict | list:
+    """Put one strength session on one date, leaving the rest of the plan's
+    schedule as it is.
+
+    This is how to schedule strength for an athlete without fixed gym days:
+    look at the week's runs with `get_training_calendar`, then add each
+    session on the day it fits. It also adds an extra session next to a weekly
+    pattern. A plan needs no weekly pattern at all; the first session added
+    starts its schedule.
+
+    Like every strength session it is a plan marker, not a watch workout, and
+    it counts as done when a Hevy workout syncs in on that date. Adding the
+    same title on the same date again replaces it.
+
+    Args:
+        plan_id: UUID of the strength plan (create_plan with activity_type
+            "strength").
+        date: The day of the session (YYYY-MM-DD).
+        title: What the session is, e.g. "Lower body + core".
+        routine_id: Optional Hevy routine id (from the hevy-mcp).
+
+    Returns:
+        The resolved schedule: dated `sessions` (`recurring` is false for
+        individual ones, each with a `conflict` flag) and `warnings` for run
+        collisions.
+    """
+    try:
+        session: dict[str, Any] = {"date": date, "title": title}
+        if routine_id is not None:
+            session["routineId"] = routine_id
+        return await client.add_plan_schedule_session(plan_id, session)
+    except Exception as e:
+        logger.exception(f"Error in add_strength_session: {e}")
+        return {"error": str(e)}
+
+
+@plans_router.tool
+@text_result
+async def move_strength_session(plan_id: str, date: str, to_date: str) -> dict | list:
+    """Move the strength session on one date to another date, keeping its
+    title and routine.
+
+    Works for an individual session and for one occurrence of a weekly
+    pattern; the pattern's other weeks stay where they are. Use it when the
+    athlete says a session doesn't fit that day this week.
+
+    Args:
+        plan_id: UUID of the strength plan.
+        date: The day the session is on now (YYYY-MM-DD).
+        to_date: The day to move it to (YYYY-MM-DD).
+
+    Returns:
+        The resolved schedule after the move. An error when nothing is
+        scheduled on `date`.
+    """
+    try:
+        return await client.move_plan_schedule_session(plan_id, date, to_date)
+    except Exception as e:
+        logger.exception(f"Error in move_strength_session: {e}")
+        return {"error": str(e)}
+
+
+@plans_router.tool
+@text_result
+async def remove_strength_session(plan_id: str, date: str) -> dict | list:
+    """Take the strength session on one date off the plan.
+
+    An individual session is removed. One occurrence of a weekly pattern is
+    skipped for that date only and the pattern carries on. To drop the whole
+    schedule use `clear_plan_schedule`.
+
+    Args:
+        plan_id: UUID of the strength plan.
+        date: The day of the session to remove (YYYY-MM-DD).
+
+    Returns:
+        The resolved schedule after the removal. An error when nothing is
+        scheduled on `date`.
+    """
+    try:
+        return await client.remove_plan_schedule_session(plan_id, date)
+    except Exception as e:
+        logger.exception(f"Error in remove_strength_session: {e}")
+        return {"error": str(e)}
+
+
+@plans_router.tool
+@text_result
 async def get_plan_schedule(plan_id: str) -> dict | list:
-    """Get a plan's recurring schedule expanded into concrete dated sessions.
+    """Get a plan's schedule (weekly pattern and individual sessions) expanded
+    into concrete dated sessions.
 
     Args:
         plan_id: UUID of the plan.
@@ -280,7 +380,8 @@ async def get_plan_schedule(plan_id: str) -> dict | list:
 @plans_router.tool
 @text_result
 async def clear_plan_schedule(plan_id: str) -> dict | list:
-    """Remove a plan's recurring weekly schedule.
+    """Remove a plan's whole schedule: the weekly pattern and every individual
+    session. For a single session use `remove_strength_session`.
 
     Args:
         plan_id: UUID of the plan.
