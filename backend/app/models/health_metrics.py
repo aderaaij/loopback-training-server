@@ -33,6 +33,9 @@ class DailyHealthMetrics(Base):
     lean_body_mass: Mapped[float | None] = mapped_column(Float, nullable=True)
     respiratory_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
     spo2: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Sleeping wrist temperature in °C, on the day the athlete woke up. The
+    # absolute reading, not Apple's deviation from baseline.
+    wrist_temperature: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(nullable=False, server_default=func.now(), onupdate=func.now())
 

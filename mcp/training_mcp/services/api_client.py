@@ -497,6 +497,27 @@ class TrainingClient:
         """Put a pair on a workout, or take it off with None."""
         return await self._request("PUT", f"/api/workouts/{workout_id}/shoe", json={"shoeId": shoe_id})
 
+    async def list_setbacks(self, active: bool | None = None, since: str | None = None) -> list | dict:
+        """Illnesses and injuries, open ones first."""
+        params: dict[str, Any] = {}
+        if active is not None:
+            params["active"] = "true" if active else "false"
+        if since:
+            params["since"] = since
+        return await self._request("GET", "/api/setbacks", params=params)
+
+    async def create_setback(self, setback: dict) -> list | dict:
+        """Log an illness or injury."""
+        return await self._request("POST", "/api/setbacks", json=setback)
+
+    async def update_setback(self, setback_id: str, changes: dict) -> list | dict:
+        """Change a setback; only the keys present are touched."""
+        return await self._request("PATCH", f"/api/setbacks/{setback_id}", json=changes)
+
+    async def put_setback_checkin(self, setback_id: str, day: str, checkin: dict) -> list | dict:
+        """Record how the athlete felt on one day of a setback."""
+        return await self._request("PUT", f"/api/setbacks/{setback_id}/checkins/{day}", json=checkin)
+
     async def get_data_consent(self) -> dict:
         """Which data categories this athlete shares with the coach.
 

@@ -43,6 +43,12 @@ METRIC_DOMAINS = (RECOVERY, BODY, ACTIVITY)
 # one row — the backend then drops the unshared columns from the payload.
 TOOL_DOMAINS: dict[str, tuple[str, ...]] = {
     "get_health_metrics": METRIC_DOMAINS,
+    # Setbacks (illness and injury) are the athlete's own account of their
+    # health; the backend 403s the same calls for a consent-scoped caller.
+    "get_setbacks": (RECOVERY,),
+    "log_setback": (RECOVERY,),
+    "update_setback": (RECOVERY,),
+    "log_setback_status": (RECOVERY,),
     "get_nutrition": (NUTRITION,),
     "get_nutrition_summary": (NUTRITION,),
 }

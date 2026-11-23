@@ -22,7 +22,7 @@ router = APIRouter()
 _METRIC_COLUMNS = [
     "sleep_duration", "sleep_stages", "resting_heart_rate", "hrv_sdnn",
     "weight", "vo2_max", "steps", "active_energy_burned", "basal_energy_burned",
-    "body_fat_percentage", "lean_body_mass", "respiratory_rate", "spo2",
+    "body_fat_percentage", "lean_body_mass", "respiratory_rate", "spo2", "wrist_temperature",
 ]
 
 # Once a user ships raw sleep samples, their daily sleep is derived server-side

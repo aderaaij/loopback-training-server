@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -29,6 +29,13 @@ class WorkoutFeedback(Base):
 
     __table_args__ = (
         UniqueConstraint("user_id", "workout_id", name="uq_workout_feedback_user_workout"),
+        # Mirrors the migrations. Without these the test schema (built from
+        # the models) accepts values the real database refuses.
+        CheckConstraint(
+            "reason IN ('busy', 'tired', 'weather', 'soreness', 'sick', 'injured', 'motivation', 'other')",
+            name="ck_workout_feedback_reason",
+        ),
+        CheckConstraint("action IN ('move', 'adjust', 'skip')", name="ck_workout_feedback_action"),
         Index("idx_workout_feedback_scheduled", scheduled_date.desc()),
         Index("idx_workout_feedback_workout", "workout_id"),
         Index("idx_workout_feedback_action", "action"),

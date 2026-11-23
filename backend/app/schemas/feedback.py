@@ -14,7 +14,7 @@ class FeedbackCreate(BaseModel):
     scheduled_date: datetime = Field(alias="scheduledDate")
     detected_at: datetime = Field(alias="detectedAt")
     acknowledged_at: datetime | None = Field(default=None, alias="acknowledgedAt")
-    reason: Literal["busy", "tired", "weather", "soreness", "motivation", "other"]
+    reason: Literal["busy", "tired", "weather", "soreness", "sick", "injured", "motivation", "other"]
     reason_note: str | None = Field(default=None, alias="reasonNote")
     action: Literal["move", "adjust", "skip"]
     new_date: datetime | None = Field(default=None, alias="newDate")

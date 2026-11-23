@@ -290,6 +290,7 @@ export interface HealthMetricsDay {
   lean_body_mass: number | null
   respiratory_rate: number | null
   spo2: number | null
+  wrist_temperature?: number | null
   created_at: string
   updated_at: string
 }

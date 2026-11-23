@@ -50,7 +50,8 @@ DEFAULT_DOMAINS: list[str] = list(KNOWN_DOMAINS)
 # Columns of `daily_health_metrics`, by the domain that governs them.
 DOMAIN_METRIC_FIELDS: dict[str, frozenset[str]] = {
     RECOVERY: frozenset(
-        {"sleep_duration", "sleep_stages", "resting_heart_rate", "hrv_sdnn", "respiratory_rate", "spo2"}
+        {"sleep_duration", "sleep_stages", "resting_heart_rate", "hrv_sdnn", "respiratory_rate", "spo2",
+         "wrist_temperature"}
     ),
     BODY: frozenset({"weight", "vo2_max", "body_fat_percentage", "lean_body_mass"}),
     ACTIVITY: frozenset({"steps", "active_energy_burned", "basal_energy_burned"}),

@@ -5,10 +5,12 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import or_, select
 
 from app.auth import CurrentUser
+from app.data_consent import RECOVERY, CurrentConsent
 from app.database import DbSession
 from app.models.plan import Plan
 from app.models.plan_note import PlanNote
 from app.models.user import User
+from app.routes.setbacks import context_setbacks, setback_hint
 from app.schemas.plan_note import PlanContext, PlanNoteCreate, PlanNoteRead, PlanNoteUpdate
 from app.tenancy import get_owned
 
@@ -81,6 +83,7 @@ def list_notes(
 def get_context(
     db: DbSession,
     user: CurrentUser,
+    consent: CurrentConsent,
     plan_id: uuid.UUID | None = None,
     since_days: int = Query(default=60, ge=1, le=365),
     limit: int = Query(default=40, ge=1, le=200),
@@ -136,6 +139,8 @@ def get_context(
             "decisions, preferences, or life-context shifts as they emerge."
         )
 
+    setbacks = context_setbacks(db, user) if consent.allows(RECOVERY) else []
+
     return PlanContext(
         plan=plan,
         notes=notes,
@@ -143,6 +148,8 @@ def get_context(
         continuity_hint=hint,
         units=user.units,
         units_hint=_units_hint(user.units),
+        setbacks=setbacks,
+        setback_hint=setback_hint(setbacks),
     )
 
 

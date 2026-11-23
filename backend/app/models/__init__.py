@@ -12,5 +12,6 @@ from app.models.api_token import ApiToken
 from app.models.auth_event import AuthEvent
 from app.models.sleep_sample import SleepSample
 from app.models.shoe import Shoe
+from app.models.setback import Setback, SetbackCheckin
 
-__all__ = ["Workout", "WorkoutQueue", "WorkoutAction", "WorkoutFeedback", "DailyHealthMetrics", "WorkoutInventory", "DailyNutrition", "Plan", "PlanNote", "User", "ApiToken", "AuthEvent", "SleepSample", "Shoe"]
+__all__ = ["Workout", "WorkoutQueue", "WorkoutAction", "WorkoutFeedback", "DailyHealthMetrics", "WorkoutInventory", "DailyNutrition", "Plan", "PlanNote", "User", "ApiToken", "AuthEvent", "SleepSample", "Shoe", "Setback", "SetbackCheckin"]

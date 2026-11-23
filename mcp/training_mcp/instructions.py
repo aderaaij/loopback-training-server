@@ -154,6 +154,9 @@ _HEAD = """\
       with reason "tired" → suggest reducing volume).
     - dismissed=true means the user closed the prompt without responding — treat like skip with less signal.
     - Use get_missed_workouts to find workouts that are overdue and haven't been addressed yet.
+    - reason "sick" or "injured" is not a scheduling problem. Ask how they are before talking
+      about the run, and do not suggest making the session up. `get_plan_context` may list the
+      illness or injury itself under `setbacks`; if it does, follow its `setback_hint`.
     - During weekly reviews, look for patterns: multiple "tired" → reduce volume, multiple "busy" →
       shift workout days, multiple "weather" → suggest indoor alternatives.
 
