@@ -1,4 +1,4 @@
-import { CaretLeft, CaretRight, Check, type Icon, X } from '@phosphor-icons/react'
+import { CaretLeft, CaretRight, Check, type Icon, Warning, X } from '@phosphor-icons/react'
 import { useMemo, useState } from 'react'
 import { usePageHeader } from '../components/PageHeader'
 import { ConflictPill, ErrorNote, Loading, SectionLabel, StatusPill } from '../components/ui'
@@ -24,6 +24,7 @@ const MONTH_NAMES = [
 ]
 const DOW_SHORT = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 const DOW_LONG = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
+const CONFLICT_LABEL = 'Run and strength session on the same day'
 
 function eventStyle(e: CalendarEntry): { bg: string; col: string } {
   if (e.kind === 'run') {
@@ -128,7 +129,7 @@ export function Calendar() {
             Strength
           </span>
           <span className="lg">
-            <span className="swatch" style={{ background: 'transparent', border: '2px solid var(--amber)' }} />
+            <Warning className="cal-conflict-icon" size={12} weight="fill" aria-hidden />
             Conflict
           </span>
         </div>
@@ -165,13 +166,24 @@ export function Calendar() {
                 'cal-cell',
                 c.muted ? 'muted' : '',
                 c.key === today ? 'today' : '',
-                conflict ? 'conflict' : '',
               ]
                 .filter(Boolean)
                 .join(' ')
               return (
                 <div className={cls} key={c.key}>
-                  <span className="cell-day">{c.date.getDate()}</span>
+                  <span className="cell-head">
+                    <span className="cell-day">{c.date.getDate()}</span>
+                    {conflict && (
+                      <span
+                        className="cal-conflict-icon"
+                        role="img"
+                        aria-label={CONFLICT_LABEL}
+                        title={CONFLICT_LABEL}
+                      >
+                        <Warning size={12} weight="fill" aria-hidden />
+                      </span>
+                    )}
+                  </span>
                   <div className="cell-events">
                     {events.slice(0, 3).map((e, i) => {
                       const st = eventStyle(e)

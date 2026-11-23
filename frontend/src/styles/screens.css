@@ -253,8 +253,15 @@
 .cal-cell.today .cell-day {
   color: var(--accent);
 }
-.cal-cell.conflict {
-  border-color: rgba(232, 163, 61, 0.5);
+.cal-cell .cell-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.cal-conflict-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--amber);
 }
 .cal-cell .cell-events {
   display: flex;
