@@ -4,6 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.plan import PlanRead
+from app.schemas.setback import SetbackOut
 
 
 # "feedback" is written by the plan-completion flow and may also be authored
@@ -62,3 +63,8 @@ class PlanContext(BaseModel):
     # this is the one call the coach makes at the start of every conversation.
     units: str | None = None
     units_hint: str = ""
+    # Open illnesses and injuries plus the ones that ended recently, and what
+    # to do about them. Empty when there are none, and also when the athlete
+    # does not share `recovery` with the coach.
+    setbacks: list[SetbackOut] = []
+    setback_hint: str = ""

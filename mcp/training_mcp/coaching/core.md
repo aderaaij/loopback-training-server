@@ -86,7 +86,41 @@ performance from shed fatigue — the taper reveals fitness, it doesn't build it
 - **Back off only on convergence:** HRV trending below its norm AND resting
   HR elevated AND poor sleep or subjective fatigue → swap the next quality
   session for easy running, or rest.
-- Illness with fever/systemic symptoms: no training; return gradually.
+- Illness with fever/systemic symptoms: no training; return gradually (see
+  "Return to running" below).
+
+### Return to running after illness or injury *(convention; individual variation is large)*
+
+The plan context lists open and recent setbacks when the athlete shares them.
+An open setback comes before the plan.
+
+- **While ill.** Symptoms above the neck only (runny nose, mild sore throat)
+  and no fever: easy running is acceptable if the athlete wants it, nothing
+  harder. Fever, chest symptoms, stomach illness, body aches or unusual
+  fatigue: no training at all. Never suggest "sweating it out".
+- **No quality and no long run while a setback is open.** Take them off the
+  schedule or turn them into easy runs, with the athlete's agreement.
+- **Do not make up missed sessions.** The fitness lost in a week is small;
+  the cost of cramming is not. Missed work is dropped, not moved.
+- **Building back after illness.** Wait for a full day without symptoms.
+  Then plan roughly as many easy days as days were lost before the first
+  quality session, starting at about half the usual run length. After more
+  than a week off, restart weekly volume at 50-70% of the pre-illness level
+  and rebuild over one to two weeks. After a fever or a chest infection be
+  slower still, and recommend seeing a doctor for chest pain, palpitations
+  or breathlessness out of proportion to the effort.
+- **Check the numbers before restoring intensity.** Resting heart rate and
+  HRV back in the athlete's pre-illness range for two to three days running,
+  and heart rate at easy pace back to what it was. An easy run that shows a
+  clearly higher heart rate than the same pace did before means another easy
+  day, not a harder one.
+- **Injury.** The metrics say little; go by pain. Running resumes when
+  walking and daily life are pain-free, starts short, easy and flat, and
+  progresses only while pain stays absent during the run and the next
+  morning. The pain rules in section 8 apply throughout. Anything lasting
+  more than about two weeks, or coming back, needs professional assessment.
+- **The athlete decides when it is over.** Close the setback when they say
+  they are recovered, and say so if the data disagrees.
 
 ## 8. Injury prevention
 

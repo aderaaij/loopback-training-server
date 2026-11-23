@@ -21,10 +21,17 @@ async def get_health_metrics(
     """Get daily health metrics synced from HealthKit.
 
     One row per day. Which metrics a row carries varies by athlete — sleep,
-    resting HR, HRV, respiratory rate, SpO2, weight, body composition, VO2Max,
+    resting HR, HRV, respiratory rate, SpO2, sleeping wrist temperature, weight, body composition, VO2Max,
     steps and energy are all possible. Read the fields that are present rather
     than assuming a fixed set; a field that isn't there is not a zero, and not
     something to ask the athlete to start recording.
+
+    `wrist_temperature` is the Apple Watch's sleeping wrist temperature in °C,
+    filed on the day the athlete woke up. The absolute figure means little and
+    differs between people; what matters is the change against the athlete's
+    own recent nights. A rise of about half a degree or more that lasts
+    several nights often goes with illness (also with alcohol, a warm room,
+    and the menstrual cycle), so read it alongside resting HR and HRV.
 
     Where energy is present: `active_energy_burned` is movement + exercise (it
     already includes workout calories); `basal_energy_burned` is resting burn,

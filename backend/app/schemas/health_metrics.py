@@ -27,6 +27,7 @@ class HealthMetricsCreate(BaseModel):
     lean_body_mass: float | None = Field(default=None, alias="leanBodyMass")
     respiratory_rate: float | None = Field(default=None, alias="respiratoryRate")
     spo2: float | None = None
+    wrist_temperature: float | None = Field(default=None, alias="wristTemperature")
 
 
 class HealthMetricsBulkCreate(BaseModel):
@@ -52,6 +53,7 @@ class HealthMetricsRead(BaseModel):
     lean_body_mass: float | None
     respiratory_rate: float | None
     spo2: float | None
+    wrist_temperature: float | None = None
     created_at: datetime
     updated_at: datetime
 

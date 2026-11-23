@@ -63,6 +63,13 @@ async def get_plan_context(
           - units_hint: how to talk and author workouts for this athlete's
             units. Follow it: an athlete on miles should never be handed
             kilometers.
+          - setbacks: the athlete's open illnesses and injuries, plus those
+            that ended in the last three weeks (kind, severity, startDate,
+            endDate, days, checkins, and for open ones `recovery`: whether
+            the recent data says it looks over). Empty when there are none or
+            when the athlete does not share them.
+          - setback_hint: what to do about them. Follow it when it is not
+            empty: an open setback comes before the plan.
     """
     try:
         return await client.get_plan_context(

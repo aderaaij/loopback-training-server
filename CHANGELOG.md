@@ -10,6 +10,52 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [Unreleased]
+
+### Added
+
+- **Illness and injury tracking ("setbacks").** A setback is an illness or
+  injury with a first day, a severity, an optional body part and note, and a
+  last day once it is over. The athlete can record how they felt on each day
+  of it (worse, same, better, fine). New endpoints under `/api/setbacks`
+  (camelCase, dates as `YYYY-MM-DD`): list, create, read, change, delete, and
+  `PUT /api/setbacks/{id}/checkins/{date}` for the daily status. One illness
+  can be open at a time, and one injury per body part.
+- **The coach knows about a setback from the first message.**
+  `get_plan_context` now returns `setbacks` (open ones, plus those that ended
+  in the last three weeks) and a `setback_hint` telling the coach what to do
+  about them. Four new coach tools: `get_setbacks`, `log_setback`,
+  `update_setback` and `log_setback_status`, so an illness mentioned in
+  conversation is recorded too. The coaching playbook has a new
+  "Return to running after illness or injury" section.
+- **A recovery check on every open setback.** Each open setback carries a
+  `recovery` object saying whether it looks over: `looks_recovered`,
+  `not_yet` or `insufficient_data`, with a one-sentence summary and the
+  numbers behind it. For an illness, resting heart rate, HRV, breathing
+  rate and sleeping wrist temperature are compared with the athlete's own median over the four weeks before
+  it started; all comparable metrics (at least two) must be back within
+  their usual range for two readings in a row. "Fine" on two consecutive
+  days also counts, for injuries too, and a fresh "worse" or "same" holds
+  the suggestion back. The app and the coach use it to ask the athlete;
+  nothing closes a setback automatically.
+- **Sleeping wrist temperature** as a daily health metric
+  (`wrist_temperature`, °C, filed on the day the athlete woke up). It belongs
+  to the recovery data domain, the coach reads it through
+  `get_health_metrics`, and the recovery check uses it. Migration
+  `d6e7f8a9b0c1`.
+- A missed-run check-in can give **"sick"** or **"injured"** as its reason.
+
+### Notes
+
+- Setbacks are shared with the coach under the existing **recovery** data
+  domain. An athlete who does not share recovery data keeps them to
+  themselves: the coach tools are not offered and the plan context leaves
+  setbacks out. The app and dashboard always show them.
+- Migration `c5d6e7f8a9b0` adds the `setback` and `setback_checkin` tables
+  and widens the check constraint on `workout_feedback.reason`.
+- The iOS app needs this release for illness and injury tracking. An older
+  app is unaffected.
+
 ## [0.1.24] — 2026-11-23
 
 ### Added
