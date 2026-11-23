@@ -73,6 +73,7 @@ export function statusChip(status: string | null | undefined): { color: string; 
   const k = (status ?? '').toLowerCase()
   if (k === 'done' || k === 'completed') return { color: '#5FB98A', bg: 'rgba(95,185,138,0.14)' }
   if (k === 'synced' || k === 'fetched') return { color: '#6E91FF', bg: 'rgba(110,145,255,0.14)' }
+  if (k === 'missed') return { color: '#DC4A3B', bg: 'rgba(220,74,59,0.14)' }
   if (k === 'warn') return { color: '#E8A33D', bg: 'rgba(232,163,61,0.14)' }
   return { color: '#9A9286', bg: 'rgba(245,235,220,0.07)' }
 }
