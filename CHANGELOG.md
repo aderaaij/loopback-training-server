@@ -20,6 +20,22 @@ System screen.
   user (`GET`/`PUT /api/me/week-start`), so it follows the athlete across
   browsers. Unset means Monday, so existing installs look exactly as before.
 
+## [0.1.23] — 2026-11-23
+
+### Added
+
+- **Heart rate recovery and VO2 max on a workout.** A workout upload can
+  carry `endHeartRate`, `heartRateAfter1Min` and `heartRateAfter2Min` (bpm as
+  the workout ended and one and two minutes later) and `vo2Max` (the estimate
+  Health recorded for that workout). They are stored on the workout and
+  returned by the workout list and detail as `end_heart_rate`,
+  `heart_rate_after_1min`, `heart_rate_after_2min` and `vo2_max`, so the
+  coach sees them in `get_recent_runs` and `get_workout_detail`. VO2 max
+  follows the athlete's `body` sharing choice, like the daily figure: a coach
+  read gets it blank when `body` is withheld. Needs an app build that sends
+  them; existing workouts stay empty until the app sends them again
+  (migration `a3b4c5d6e7f8`).
+
 ## [0.1.22] — 2026-11-21
 
 ### Fixed

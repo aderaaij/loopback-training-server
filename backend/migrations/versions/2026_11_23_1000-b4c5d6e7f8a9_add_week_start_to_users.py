@@ -7,9 +7,9 @@ like the units preference, so it follows them across browsers.
 NULL means "never chosen" and reads as Monday, so existing rows stay NULL and
 existing installs look exactly as before.
 
-Revision ID: a3b4c5d6e7f8
-Revises: f2a3b4c5d6e7
-Create Date: 2026-11-21 12:00:00.000000
+Revision ID: b4c5d6e7f8a9
+Revises: a3b4c5d6e7f8
+Create Date: 2026-11-23 10:00:00.000000
 
 """
 from typing import Sequence, Union
@@ -19,8 +19,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'a3b4c5d6e7f8'
-down_revision: Union[str, None] = 'f2a3b4c5d6e7'
+revision: str = 'b4c5d6e7f8a9'
+down_revision: Union[str, None] = 'a3b4c5d6e7f8'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

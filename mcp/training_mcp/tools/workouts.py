@@ -40,7 +40,9 @@ async def get_recent_runs(
     Returns:
         List of workout objects with fields: id, activity_type, start_date, end_date,
         duration, total_distance, total_energy_burned, source, plan_workout_id,
-        shoe_id, shoe_confirmed, effort_score, estimated_effort_score, created_at.
+        shoe_id, shoe_confirmed, effort_score, estimated_effort_score,
+        end_heart_rate, heart_rate_after_1min, heart_rate_after_2min, vo2_max,
+        created_at.
 
         - shoe_id: the pair of shoes the athlete has on this workout; look it
           up in get_shoes. Null means no pair was recorded, not barefoot.
@@ -66,6 +68,24 @@ async def get_recent_runs(
           review when it appears repeatedly. May be null when no estimate exists.
 
         Treat null as "no signal," not "low effort."
+
+        - end_heart_rate, heart_rate_after_1min, heart_rate_after_2min: heart
+          rate (bpm) as the workout ended and one and two minutes later. The
+          recovery drop is end_heart_rate minus the later reading. How the
+          athlete stopped decides most of it: a hard effort ended abruptly
+          gives a large drop, an easy run or a jogged cooldown a small one, so
+          compare only like with like (intervals with intervals, races with
+          races) and read a trend over several such sessions, never one run.
+          A falling drop across comparable hard sessions can point to fatigue;
+          resting heart rate and HRV are the stronger signals for that. Null
+          when the watch recorded nothing usable after the end, or the workout
+          was paused well before it was ended.
+        - vo2_max: the VO2 max estimate (mL/kg/min) Apple Health recorded for
+          this workout. Only some outdoor runs, walks and hikes produce one,
+          and a single reading moves with heat, hills and pacing; the trend
+          is what counts. Null means none was recorded for this workout, or
+          the athlete does not share body data with the coach. Do not ask
+          them to start tracking it.
     """
     try:
         return await client.list_workouts(
@@ -110,6 +130,10 @@ async def get_workout_detail(workout_id: str) -> dict | list:
         shoe_id is the pair of shoes on this workout (see get_shoes), or null
         when none was recorded. shoe_confirmed false means that pair was
         assigned automatically and nobody has checked it.
+
+        end_heart_rate, heart_rate_after_1min and heart_rate_after_2min give
+        the heart rate recovery after the workout, and vo2_max the estimate
+        Health recorded for it; see get_recent_runs for how to read them.
     """
     try:
         return await client.get_workout(workout_id, include_samples=False)
