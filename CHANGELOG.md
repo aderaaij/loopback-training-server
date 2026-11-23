@@ -20,6 +20,19 @@ System screen.
   user (`GET`/`PUT /api/me/week-start`), so it follows the athlete across
   browsers. Unset means Monday, so existing installs look exactly as before.
 
+### Changed
+
+- Calendar entries show how each session went instead of striking through
+  completed ones. A completed session gets a check, a missed one (scheduled
+  before today, neither completed nor skipped) gets an ✗, and only a skipped
+  session is struck through. The "This week" list says missed and skipped the
+  same way. A session scheduled today is never shown as missed.
+- On the calendar's month grid, a day where a run and a strength session
+  collide is now marked with a small warning icon next to the day number
+  instead of an amber border, which looked too much like today's highlight.
+  Today is the only cell with a highlighted border. The legend shows the
+  same icon.
+
 ## [0.1.23] — 2026-11-23
 
 ### Added

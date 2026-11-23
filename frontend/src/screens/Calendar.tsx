@@ -1,8 +1,9 @@
-import { CaretLeft, CaretRight } from '@phosphor-icons/react'
+import { CaretLeft, CaretRight, Check, type Icon, Warning, X } from '@phosphor-icons/react'
 import { useMemo, useState } from 'react'
 import { usePageHeader } from '../components/PageHeader'
 import { ConflictPill, ErrorNote, Loading, SectionLabel, StatusPill } from '../components/ui'
 import { addDays, startOfWeek, toDateKey, todayKey } from '../lib/format'
+import { entryStatus, type EntryStatus } from '../lib/calendarStatus'
 import { useCalendar } from '../lib/queries'
 import type { CalendarEntry } from '../lib/types'
 import { useWeekStart } from '../lib/weekStart'
@@ -26,12 +27,33 @@ const MONTH_NAMES = [
 const DOW_SHORT = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 const DOW_LONG = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
 const sundayFirst = (days: string[]) => [days[6], ...days.slice(0, 6)]
+const CONFLICT_LABEL = 'Run and strength session on the same day'
 
 function eventStyle(e: CalendarEntry): { bg: string; col: string } {
   if (e.kind === 'run') {
     return { bg: 'color-mix(in srgb, var(--accent) 18%, transparent)', col: 'var(--accent)' }
   }
   return { bg: 'rgba(124,92,255,0.16)', col: 'var(--purple-light)' }
+}
+
+/**
+ * How each status is marked on a calendar chip, in one place. Typed by
+ * `EntryStatus`, so adding a status fails to compile until it's listed here.
+ * Skipped has no icon (its strikethrough says it) but screen readers still
+ * hear the label.
+ */
+const STATUS_MARK: Record<EntryStatus, { label: string; icon: Icon | null; srOnly: boolean }> = {
+  completed: { label: 'Completed', icon: Check, srOnly: false },
+  missed: { label: 'Missed', icon: X, srOnly: false },
+  skipped: { label: 'Skipped', icon: null, srOnly: true },
+  upcoming: { label: 'Upcoming', icon: null, srOnly: false },
+}
+
+function StatusMark({ status }: { status: EntryStatus }) {
+  const { label, icon: MarkIcon, srOnly } = STATUS_MARK[status]
+  if (MarkIcon) return <MarkIcon className="cal-mark" size={10} weight="bold" role="img" aria-label={label} />
+  if (srOnly) return <span className="cal-sr">{label}: </span>
+  return null
 }
 
 export function Calendar() {
@@ -113,7 +135,7 @@ export function Calendar() {
             Strength
           </span>
           <span className="lg">
-            <span className="swatch" style={{ background: 'transparent', border: '2px solid var(--amber)' }} />
+            <Warning className="cal-conflict-icon" size={12} weight="fill" aria-hidden />
             Conflict
           </span>
         </div>
@@ -150,23 +172,36 @@ export function Calendar() {
                 'cal-cell',
                 c.muted ? 'muted' : '',
                 c.key === today ? 'today' : '',
-                conflict ? 'conflict' : '',
               ]
                 .filter(Boolean)
                 .join(' ')
               return (
                 <div className={cls} key={c.key}>
-                  <span className="cell-day">{c.date.getDate()}</span>
+                  <span className="cell-head">
+                    <span className="cell-day">{c.date.getDate()}</span>
+                    {conflict && (
+                      <span
+                        className="cal-conflict-icon"
+                        role="img"
+                        aria-label={CONFLICT_LABEL}
+                        title={CONFLICT_LABEL}
+                      >
+                        <Warning size={12} weight="fill" aria-hidden />
+                      </span>
+                    )}
+                  </span>
                   <div className="cell-events">
                     {events.slice(0, 3).map((e, i) => {
                       const st = eventStyle(e)
+                      const status = entryStatus(e, today)
                       return (
                         <span
                           key={i}
-                          className={`cal-event${e.completed ? ' done' : ''}`}
+                          className={`cal-event ${status}`}
                           style={{ background: st.bg, color: st.col }}
-                          title={e.title}
+                          title={status === 'upcoming' ? e.title : `${e.title} · ${STATUS_MARK[status].label}`}
                         >
+                          <StatusMark status={status} />
                           {e.title}
                         </span>
                       )
@@ -226,6 +261,7 @@ export function Calendar() {
             }
             return events.map((e, j) => {
               const st = eventStyle(e)
+              const status = entryStatus(e, today)
               return (
                 <div className="week-row" key={`${key}-${j}`} style={{ cursor: 'default' }}>
                   <div className="wr-date" style={{ visibility: j === 0 ? 'visible' : 'hidden' }}>
@@ -236,7 +272,7 @@ export function Calendar() {
                   </div>
                   <span className="wr-bar" style={{ background: st.col }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="row-title">{e.title}</div>
+                    <div className={`row-title${status === 'skipped' ? ' cal-skipped' : ''}`}>{e.title}</div>
                     <div className="row-meta">
                       {e.kind === 'strength'
                         ? [e.planName, e.routineId ? 'Hevy routine' : null].filter(Boolean).join(' · ') || 'strength'
@@ -244,7 +280,7 @@ export function Calendar() {
                     </div>
                   </div>
                   {e.conflict && <ConflictPill />}
-                  <StatusPill status={e.completed ? 'completed' : (e.status ?? 'planned')} />
+                  <StatusPill status={status === 'upcoming' ? (e.status ?? 'planned') : status} />
                 </div>
               )
             })

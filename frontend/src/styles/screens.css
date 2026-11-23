@@ -253,8 +253,15 @@
 .cal-cell.today .cell-day {
   color: var(--accent);
 }
-.cal-cell.conflict {
-  border-color: rgba(232, 163, 61, 0.5);
+.cal-cell .cell-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.cal-conflict-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--amber);
 }
 .cal-cell .cell-events {
   display: flex;
@@ -272,9 +279,28 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.cal-event.done {
+.cal-event .cal-mark {
+  vertical-align: -1px;
+  margin-right: 3px;
+}
+.cal-event.completed {
+  opacity: 0.75;
+}
+.cal-event.missed .cal-mark {
+  color: var(--red);
+}
+.cal-event.skipped,
+.cal-skipped {
   opacity: 0.55;
   text-decoration: line-through;
+}
+.cal-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .week-row {
@@ -317,5 +343,8 @@
     width: 60%;
     padding: 0;
     border-radius: 3px;
+  }
+  .cal-event .cal-mark {
+    display: none;
   }
 }
