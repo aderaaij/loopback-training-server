@@ -54,8 +54,23 @@ def build_calendar(db: DbSession, user_id: uuid.UUID | None, date_from: date, da
     run_rows = db.scalars(run_q).all()
 
     # --- Completed strength sessions in the window (for done-matching) ---
-    done_rows = db.scalars(done_q).all()
-    done_dates = {w.start_date.date() for w in done_rows}
+    # Earliest first, ties broken by id, so a day with several strength
+    # workouts always links to the same one.
+    done_rows = db.scalars(done_q.order_by(Workout.start_date, Workout.id)).all()
+    done_by_date: dict[date, Workout] = {}
+    for w in done_rows:
+        done_by_date.setdefault(w.start_date.date(), w)
+
+    # --- The workout recorded for each queued run, if any ---
+    # Newest first, ties broken by id, so an item with several linked workouts
+    # always shows the same one.
+    workout_for_run: dict[uuid.UUID, Workout] = {}
+    if run_rows:
+        linked_q = select(Workout).where(Workout.plan_workout_id.in_([r.id for r in run_rows]))
+        if user_id is not None:
+            linked_q = linked_q.where(Workout.user_id == user_id)
+        for w in db.scalars(linked_q.order_by(Workout.start_date.desc(), Workout.id)):
+            workout_for_run.setdefault(w.plan_workout_id, w)
 
     # --- Recurring strength sessions from live + upcoming plan schedules ---
     active_plans = db.scalars(active_plans_q).all()
@@ -81,6 +96,8 @@ def build_calendar(db: DbSession, user_id: uuid.UUID | None, date_from: date, da
             "planId": str(r.plan_id) if r.plan_id else None,
             "planName": plan_names.get(r.plan_id),
             "routineId": None,
+            "queueId": str(r.id),
+            "workoutId": str(workout_for_run[r.id].id) if r.id in workout_for_run else None,
             "completed": r.status == "completed",
             "conflict": False,
         })
@@ -105,7 +122,9 @@ def build_calendar(db: DbSession, user_id: uuid.UUID | None, date_from: date, da
                 "planId": str(plan.id),
                 "planName": plan.name,
                 "routineId": s["routineId"],
-                "completed": d in done_dates,
+                "queueId": None,
+                "workoutId": str(done_by_date[d].id) if d in done_by_date else None,
+                "completed": d in done_by_date,
                 "conflict": False,
             })
 

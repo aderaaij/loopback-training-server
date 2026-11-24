@@ -279,6 +279,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.cal-event {
+  display: block;
+}
+a.cal-event:hover {
+  filter: brightness(1.25);
+}
 .cal-event .cal-mark {
   vertical-align: -1px;
   margin-right: 3px;
@@ -310,6 +316,12 @@
   padding: 14px 20px;
   border-top: 1px solid var(--row-line);
   width: 100%;
+}
+.week-row.link {
+  color: inherit;
+}
+.week-row.link:hover {
+  background: rgba(245, 235, 220, 0.02);
 }
 .week-row .wr-date {
   width: 46px;

@@ -1,5 +1,6 @@
 import { CheckCircle, Trash, Watch, WarningCircle } from '@phosphor-icons/react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { usePageHeader } from '../components/PageHeader'
 import {
   ConfirmDialog,
@@ -80,6 +81,14 @@ export function Queue() {
   const del = useDeleteQueueItem()
   const [deleting, setDeleting] = useState<QueueItem | null>(null)
 
+  // The calendar links here as /queue#<item id>: highlight that item and
+  // scroll it into view once the list has loaded.
+  const targetId = useLocation().hash.slice(1)
+  const targetLoaded = !!targetId && (queue ?? []).some((q) => q.id === targetId)
+  useEffect(() => {
+    if (targetLoaded) document.getElementById(`queue-${targetId}`)?.scrollIntoView({ block: 'center' })
+  }, [targetId, targetLoaded])
+
   const planName = useMemo(() => {
     const map = new Map<string, string>()
     for (const p of plans ?? []) map.set(p.id, p.name)
@@ -121,7 +130,7 @@ export function Queue() {
                 q.plan_id ? planName.get(q.plan_id) : null,
               ].filter(Boolean)
               return (
-                <div className="queue-card" key={q.id}>
+                <div className={`queue-card${q.id === targetId ? ' target' : ''}`} id={`queue-${q.id}`} key={q.id}>
                   <div className="q-top">
                     <IconTile icon={meta.icon} color={meta.color} size={40} iconSize={20} />
                     <div style={{ flex: 1, minWidth: 0 }}>

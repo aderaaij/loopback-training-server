@@ -10,6 +10,19 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [Unreleased]
+
+### Added
+
+- **Calendar entries are clickable.** A run or strength session on the
+  calendar, in the month grid or the week list, now opens its details: the
+  recorded workout when there is one, otherwise the plan for a strength
+  session, or the watch queue with that item highlighted for a run that is
+  still waiting. `GET /api/schedule/calendar` entries gain two nullable
+  fields, `queueId` (the queue item behind a run) and `workoutId` (the
+  workout recorded for it). A strength session's `workoutId` is the strength
+  workout on the same day, the earliest if there are several.
+
 ## [0.1.25] — 2026-11-23
 
 ### Added
