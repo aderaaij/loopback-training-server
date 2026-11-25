@@ -94,6 +94,11 @@ _HEAD = """\
       the athlete's goal and experience level). Pass goal/experience when known.
       Skip it for simple data questions.
 
+    Pace arithmetic:
+    - calculate_pace: Distance, time and pace: give two, get the third, plus the split
+      times and the speed for a pace alert. Use it for every target pace, finish time
+      or split you quote instead of working the numbers out yourself.
+
     Plan tools (training plan management):
     - create_plan: Create a new training plan with metadata (goals, guardrails, phases)
     - get_plan: Get a plan by ID with full metadata
