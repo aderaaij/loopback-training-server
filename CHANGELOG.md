@@ -10,6 +10,24 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [Unreleased]
+
+### Added
+
+- **A pace calculator for the coach.** New coach tool `calculate_pace`: give
+  two of a distance (`race` or `distance_m`), a `time` and a `pace`, and it
+  returns the third, the pace per km and per mile, the speed in m/s for a
+  workout's pace alert, and the split times at every km or mile and at 5K,
+  10K, half and 30K. The coach is told to use it for every target pace,
+  finish time and split it quotes, rather than doing the arithmetic itself.
+  It converts between the numbers and does not judge whether a pace is
+  realistic. The iOS app has the same calculator.
+
+### Notes
+
+- No endpoint, no stored data and no migration. The tool is offered whatever
+  the athlete shares.
+
 ## [0.1.26] — 2026-11-25
 
 ### Added
