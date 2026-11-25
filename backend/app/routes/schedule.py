@@ -63,14 +63,18 @@ def build_calendar(db: DbSession, user_id: uuid.UUID | None, date_from: date, da
 
     # --- The workout recorded for each queued run, if any ---
     # Newest first, ties broken by id, so an item with several linked workouts
-    # always shows the same one.
-    workout_for_run: dict[uuid.UUID, Workout] = {}
+    # always shows the same one. Only the two ids are fetched: a run's row
+    # carries its samples and route, and the app asks for this calendar on
+    # every launch.
+    workout_for_run: dict[uuid.UUID, uuid.UUID] = {}
     if run_rows:
-        linked_q = select(Workout).where(Workout.plan_workout_id.in_([r.id for r in run_rows]))
+        linked_q = select(Workout.id, Workout.plan_workout_id).where(
+            Workout.plan_workout_id.in_([r.id for r in run_rows])
+        )
         if user_id is not None:
             linked_q = linked_q.where(Workout.user_id == user_id)
-        for w in db.scalars(linked_q.order_by(Workout.start_date.desc(), Workout.id)):
-            workout_for_run.setdefault(w.plan_workout_id, w)
+        for workout_id, item_id in db.execute(linked_q.order_by(Workout.start_date.desc(), Workout.id)):
+            workout_for_run.setdefault(item_id, workout_id)
 
     # --- Recurring strength sessions from live + upcoming plan schedules ---
     active_plans = db.scalars(active_plans_q).all()
@@ -97,7 +101,7 @@ def build_calendar(db: DbSession, user_id: uuid.UUID | None, date_from: date, da
             "planName": plan_names.get(r.plan_id),
             "routineId": None,
             "queueId": str(r.id),
-            "workoutId": str(workout_for_run[r.id].id) if r.id in workout_for_run else None,
+            "workoutId": str(workout_for_run[r.id]) if r.id in workout_for_run else None,
             "completed": r.status == "completed",
             "conflict": False,
         })
