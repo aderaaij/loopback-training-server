@@ -541,6 +541,10 @@ export interface CalendarEntry {
   planId: string | null
   planName: string | null
   routineId: string | null
+  /** The watch-queue item behind a run; null for strength sessions. */
+  queueId: string | null
+  /** The recorded workout, once there is one. */
+  workoutId: string | null
   completed: boolean
   conflict: boolean
 }

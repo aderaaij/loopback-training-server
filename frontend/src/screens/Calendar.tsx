@@ -1,8 +1,10 @@
 import { CaretLeft, CaretRight, Check, type Icon, Warning, X } from '@phosphor-icons/react'
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { usePageHeader } from '../components/PageHeader'
 import { ConflictPill, ErrorNote, Loading, SectionLabel, StatusPill } from '../components/ui'
 import { addDays, startOfWeek, toDateKey, todayKey } from '../lib/format'
+import { entryLink } from '../lib/calendarLink'
 import { entryStatus, type EntryStatus } from '../lib/calendarStatus'
 import { useCalendar } from '../lib/queries'
 import type { CalendarEntry } from '../lib/types'
@@ -194,15 +196,25 @@ export function Calendar() {
                     {events.slice(0, 3).map((e, i) => {
                       const st = eventStyle(e)
                       const status = entryStatus(e, today)
-                      return (
-                        <span
-                          key={i}
-                          className={`cal-event ${status}`}
-                          style={{ background: st.bg, color: st.col }}
-                          title={status === 'upcoming' ? e.title : `${e.title} · ${STATUS_MARK[status].label}`}
-                        >
+                      const to = entryLink(e)
+                      const attrs = {
+                        className: `cal-event ${status}`,
+                        style: { background: st.bg, color: st.col },
+                        title: status === 'upcoming' ? e.title : `${e.title} · ${STATUS_MARK[status].label}`,
+                      }
+                      const label = (
+                        <>
                           <StatusMark status={status} />
                           {e.title}
+                        </>
+                      )
+                      return to ? (
+                        <Link key={i} to={to} {...attrs}>
+                          {label}
+                        </Link>
+                      ) : (
+                        <span key={i} {...attrs}>
+                          {label}
                         </span>
                       )
                     })}
@@ -262,8 +274,9 @@ export function Calendar() {
             return events.map((e, j) => {
               const st = eventStyle(e)
               const status = entryStatus(e, today)
-              return (
-                <div className="week-row" key={`${key}-${j}`} style={{ cursor: 'default' }}>
+              const to = entryLink(e)
+              const row = (
+                <>
                   <div className="wr-date" style={{ visibility: j === 0 ? 'visible' : 'hidden' }}>
                     <div className="wr-dow">{dowLong[i]}</div>
                     <div className="wr-day" style={{ color: isToday ? 'var(--accent)' : 'var(--text)' }}>
@@ -281,6 +294,15 @@ export function Calendar() {
                   </div>
                   {e.conflict && <ConflictPill />}
                   <StatusPill status={status === 'upcoming' ? (e.status ?? 'planned') : status} />
+                </>
+              )
+              return to ? (
+                <Link className="week-row link" to={to} key={`${key}-${j}`}>
+                  {row}
+                </Link>
+              ) : (
+                <div className="week-row" key={`${key}-${j}`} style={{ cursor: 'default' }}>
+                  {row}
                 </div>
               )
             })

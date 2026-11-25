@@ -16,6 +16,10 @@
   border: 1px solid var(--border);
   padding: 16px 18px;
 }
+.queue-card.target {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
 .queue-card .q-top {
   display: flex;
   align-items: center;
