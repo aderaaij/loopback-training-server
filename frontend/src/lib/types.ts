@@ -431,10 +431,22 @@ export interface PlanScheduleDay {
   routineId?: string | null
 }
 
+/** One session on its own date, outside the weekly pattern. */
+export interface PlanScheduleSession {
+  date: string
+  title: string
+  routineId?: string | null
+}
+
 export interface PlanSchedule {
+  /** Always present; for a schedule of dated sessions only, the first one's date. */
   startDate: string
   weeks: number
+  /** Empty when the plan has no weekly pattern. */
   days: Partial<Record<'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun', PlanScheduleDay>>
+  sessions?: PlanScheduleSession[]
+  /** Dates on which the weekly pattern's occurrence is left out. */
+  skipDates?: string[]
   time?: string | null
   timezone?: string | null
 }
@@ -444,6 +456,8 @@ export interface ScheduledSession {
   weekday: string
   title: string
   routineId: string | null
+  /** False for a session on its own date, true for a weekly occurrence. */
+  recurring: boolean
   conflict: boolean
   conflictsWith: string[]
 }

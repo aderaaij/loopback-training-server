@@ -141,6 +141,9 @@ export function PlanDetail() {
       : []
   const curPhase = currentPhaseIndex(plan, phases.length)
   const weekSchedule = schedule?.schedule
+  // A plan can be made of sessions on individual dates only, with no weekly
+  // pattern to draw.
+  const hasWeeklyPattern = Object.keys(weekSchedule?.days ?? {}).length > 0
   const upcomingSessions = (schedule?.sessions ?? []).filter((s) => s.date >= todayKey()).slice(0, 5)
 
   return (
@@ -276,13 +279,15 @@ export function PlanDetail() {
       {weekSchedule && (
         <div className="phases-card">
           <div className="chart-head" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-            <SectionLabel>Weekly schedule</SectionLabel>
+            <SectionLabel>{hasWeeklyPattern ? 'Weekly schedule' : 'Sessions'}</SectionLabel>
             <span className="mono-meta">
-              {weekSchedule.weeks} wk from {fmtDay(weekSchedule.startDate)}
+              {hasWeeklyPattern
+                ? `${weekSchedule.weeks} wk from ${fmtDay(weekSchedule.startDate)}`
+                : `${schedule?.sessions.length ?? 0} scheduled`}
               {weekSchedule.time ? ` · ${weekSchedule.time}` : ''}
             </span>
           </div>
-          <div className="week-sched">
+          {hasWeeklyPattern && <div className="week-sched">
             {WEEKDAYS.map((d) => {
               const slot = weekSchedule.days[d]
               const meta = activityMeta(plan.activity_type === 'running' && slot ? 'strength' : plan.activity_type)
@@ -303,7 +308,7 @@ export function PlanDetail() {
                 </div>
               )
             })}
-          </div>
+          </div>}
           {(schedule?.warnings.length ?? 0) > 0 && (
             <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
               {schedule!.warnings.map((w, i) => (

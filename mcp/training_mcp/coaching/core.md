@@ -173,9 +173,13 @@ An open setback comes before the plan.
    2.56 · 7:00 = 2.38). Give quality steps a pace band; leave easy runs
    **without** a pace alert (or HR-zone only) — a pace floor on easy days
    fights §3.
-7. Strength (§8) is scheduled via the plan's weekly cadence
-   (`set_strength_schedule`, referencing Hevy routines) — strength days are
-   plan markers, not watch workouts. Don't place quality runs the day after
+7. Strength (§8) is scheduled on a strength plan, referencing Hevy
+   routines. Ask whether the athlete lifts on fixed days: if so, a weekly
+   cadence (`set_strength_schedule`); if they fit it around the week,
+   individual sessions (`add_strength_session`), placed after looking at the
+   week's runs. `move_strength_session` and `remove_strength_session` change
+   one session without touching the rest. Strength days are plan markers,
+   not watch workouts. Don't place quality runs the day after
    heavy leg work; the calendar's conflict warnings help here.
 8. Weekly review rhythm: planned-vs-actual (`get_plan_workouts` +
    completions), feedback patterns (3+ "tired" → cut volume; repeated
