@@ -16,7 +16,7 @@ from app.backup import run_scheduler
 from app.database import SessionLocal
 from app.mcp_mount import MCPDispatch, mcp_app
 from app.rate_limit import limiter
-from app.routes import actions, admin, auth, config, feedback, health, health_metrics, inventory, me, nutrition, plan_notes, plans, queue, schedule, setbacks, shoes, sleep, workouts
+from app.routes import actions, admin, auth, config, feedback, fuel, health, health_metrics, inventory, me, nutrition, plan_notes, plans, queue, schedule, setbacks, shoes, sleep, workouts
 from app.version import __version__
 
 
@@ -114,6 +114,9 @@ api_router.include_router(plan_notes.router, prefix="/plan-notes", tags=["plan-n
 api_router.include_router(schedule.router, prefix="/schedule", tags=["schedule"])
 api_router.include_router(shoes.router, prefix="/shoes", tags=["shoes"])
 api_router.include_router(setbacks.router, prefix="/setbacks", tags=["setbacks"])
+api_router.include_router(fuel.router, prefix="/fuel", tags=["fuel"])
+api_router.include_router(fuel.workout_router, prefix="/workouts", tags=["fuel"])
+api_router.include_router(fuel.session_router, prefix="/workouts/queue", tags=["fuel"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 app.include_router(api_router)
 

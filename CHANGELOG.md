@@ -14,6 +14,29 @@ System screen.
 
 ### Added
 
+- **Fuelling on a workout.** The athlete can record what they drank and ate
+  on a workout, and a planned session can carry a fuelling plan. This is
+  entered by hand and is separate from the nutrition sync, which is daily
+  totals read from Health.
+  - **Saved products**, `/api/fuel/products` (list, create, change, delete):
+    a gel or a drink mix saved once, with its carbohydrates and caffeine, and
+    for a drink the serving those are for.
+  - **The log on a workout**, `/api/workouts/{id}/fuel`: `GET` returns what
+    was taken with its totals and hourly rates, next to the plan of the
+    session the workout counts for. `POST` adds one entry, `PUT` replaces the
+    list.
+  - **The plan on a session**, `/api/workouts/queue/{id}/fuel`, with the same
+    three methods.
+  - `GET /api/fuel/history` lists the latest workouts that have a log.
+  - A drink is one entry with the total volume; a gel or anything else is an
+    entry of its own, with where in the workout it was taken (meters). An
+    entry made from a product copies its name and figures, so changing or
+    deleting the product leaves the record as it was.
+- **Seven coach tools:** `get_fuel_products`, `add_fuel_product`,
+  `get_fuel_history`, `get_workout_fuel`, `log_workout_fuel`, `get_fuel_plan`
+  and `set_fuel_plan`. The coach can read how a long run was fuelled, log
+  what the athlete tells it, and write the plan for the next one from the
+  athlete's own products and earlier logs.
 - **A pace calculator for the coach.** New coach tool `calculate_pace`: give
   two of a distance (`race` or `distance_m`), a `time` and a `pace`, and it
   returns the third, the pace per km and per mile, the speed in m/s for a
@@ -25,8 +48,15 @@ System screen.
 
 ### Notes
 
-- No endpoint, no stored data and no migration. The tool is offered whatever
-  the athlete shares.
+- Shared with the coach under the existing **nutrition** category: without
+  it the seven tools are not offered and the endpoints answer 403 to the
+  coach. The app and the dashboard are not filtered.
+- Migration `e7f8a9b0c1d2` adds `fuel_product` and `fuel_entry`. Nothing
+  existing changes, and older app builds are unaffected.
+- Fuelling is camelCase on the wire; volumes in ml, carbohydrates in g,
+  caffeine in mg, positions in meters.
+- `calculate_pace` has no endpoint and stores nothing, and it is offered
+  whatever the athlete shares.
 
 ## [0.1.26] — 2026-11-25
 

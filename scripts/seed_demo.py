@@ -5,7 +5,8 @@ Creates athlete "sofia" and fills ~16 weeks of realistic training through the
 public API only (no DB access): runs with splits/heart-rate/cadence/GPS routes,
 Hevy-style strength sessions, daily health metrics, nutrition logs, a completed
 and an active training plan, a strength schedule, queued sessions (past ones
-completed, one skipped with feedback), and coaching notes.
+completed, one skipped with feedback), fuelling products with a plan and a log
+on the recent long runs, and coaching notes.
 
 Stdlib-only. Designed for the disposable demo stack:
 
@@ -606,6 +607,8 @@ def main() -> None:
     horizon = monday0 + timedelta(weeks=2)
     skip_day = plan_start + timedelta(weeks=2, days=2)  # week-3 Wednesday, ~2.5 weeks ago
     n_queue = n_done = 0
+    long_done: list[tuple[str, str, float]] = []  # (session id, workout id, km)
+    long_ahead: list[tuple[str, float]] = []  # (session id, km)
     for w, km in enumerate(plan_km):
         week_monday = plan_start + timedelta(weeks=w)
         quality = "intervals" if w % 2 == 0 else "tempo"
@@ -643,9 +646,41 @@ def main() -> None:
                 api.req("PATCH", f"/api/queue/{item['id']}/status", {"status": "completed"})
                 n_done += 1
                 if not args.skip_workouts:
-                    api.req("POST", "/api/workouts", make_run(day, (6, 40), kind, dist, pace_of(kind, day), rng, plan_workout_id=item["id"]))
+                    run = make_run(day, (6, 40), kind, dist, pace_of(kind, day), rng, plan_workout_id=item["id"])
+                    api.req("POST", "/api/workouts", run)
                     n_workouts += 1
+                    if kind == "long":
+                        long_done.append((item["id"], run["id"], dist))
+            elif kind == "long":
+                long_ahead.append((item["id"], dist))
     print(f"queue: {n_queue} sessions ({n_done} completed, 1 skipped with feedback)")
+
+    # ── fuelling: saved products, a plan and a log on recent long runs, a plan on the next ──
+    water = api.req("POST", "/api/fuel/products", {"name": "Water", "kind": "drink", "volumeMl": 500})
+    mix = api.req("POST", "/api/fuel/products", {"name": "Electrolyte mix", "kind": "drink", "volumeMl": 500, "carbsG": 40})
+    gel = api.req("POST", "/api/fuel/products", {"name": "Gel 30", "kind": "gel", "carbsG": 30})
+    caf = api.req("POST", "/api/fuel/products", {"name": "Caffeine gel", "kind": "gel", "carbsG": 30, "caffeineMg": 100})
+
+    def fuel_plan(km: float) -> list[dict]:
+        # About an hour of running: a bottle and a gel, a second gel from 11 km.
+        entries = [
+            {"productId": mix["id"] if km >= 11 else water["id"], "volumeMl": 500},
+            {"productId": gel["id"], "atDistance": round(km * 0.45) * 1000},
+        ]
+        if km >= 11:
+            entries.append({"productId": caf["id"], "atDistance": round(km * 0.75) * 1000})
+        return entries
+
+    for n, (session_id, workout_id, km) in enumerate(long_done[-3:]):
+        planned = fuel_plan(km)
+        api.req("PUT", f"/api/workouts/queue/{session_id}/fuel", {"entries": planned})
+        # The oldest of them drank less and skipped its last gel, so a log
+        # that differs from its plan is there to look at.
+        taken = [{**planned[0], "volumeMl": 350}, *planned[1:-1]] if n == 0 else planned
+        api.req("PUT", f"/api/workouts/{workout_id}/fuel", {"entries": taken})
+    for session_id, km in long_ahead[:1]:
+        api.req("PUT", f"/api/workouts/queue/{session_id}/fuel", {"entries": fuel_plan(km)})
+    print(f"fuelling: 4 products, {len(long_done[-3:])} long runs logged, {len(long_ahead[:1])} planned")
 
     # ── strength (Hevy), flexibility (Bend), walks, one ride ──
     for w in range(8 if not args.skip_workouts else 0):
