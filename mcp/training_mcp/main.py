@@ -12,6 +12,7 @@ from training_mcp.middleware import ConsentMiddleware
 from training_mcp.tools.actions import actions_router
 from training_mcp.tools.coaching import coaching_router
 from training_mcp.tools.feedback import feedback_router
+from training_mcp.tools.fuel import fuel_router
 from training_mcp.tools.health_metrics import health_metrics_router
 from training_mcp.tools.nutrition import nutrition_router
 from training_mcp.tools.plan_notes import plan_notes_router
@@ -42,6 +43,7 @@ mcp.mount(actions_router)
 mcp.mount(feedback_router)
 mcp.mount(health_metrics_router)
 mcp.mount(nutrition_router)
+mcp.mount(fuel_router)
 mcp.mount(plans_router)
 mcp.mount(plan_notes_router)
 
