@@ -10,6 +10,48 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [0.1.26] — 2026-11-25
+
+### Added
+
+- **Strength sessions on individual dates.** A strength plan's schedule could
+  only repeat weekly, so an athlete without fixed gym days got every session
+  on the wrong date, and none were ticked off because completion is matched
+  by date. `metadata.schedule` can now hold `sessions`
+  (`[{date, title, routineId}]`) next to or instead of the weekly pattern,
+  and `skipDates` that take single occurrences out of the pattern.
+  `PUT /api/plans/{id}/schedule` accepts dated sessions with or without a
+  pattern.
+- **Add, move or remove one session.**
+  `POST /api/plans/{id}/schedule/sessions` adds a session on a date, and
+  starts a schedule on a plan without one.
+  `DELETE /api/plans/{id}/schedule/sessions/{date}` removes the sessions on
+  a date, and `POST /api/plans/{id}/schedule/sessions/{date}/move` moves
+  them (`{"to": "YYYY-MM-DD"}`). Removing or moving an occurrence of the
+  weekly pattern changes that week only.
+- Each session in a resolved schedule has **`recurring`**: false for a
+  session on its own date, true for an occurrence of the weekly pattern.
+- **Three new coach tools:** `add_strength_session`, `move_strength_session`
+  and `remove_strength_session`. The coaching playbook tells the coach to ask
+  whether the athlete lifts on fixed days, and to place individual sessions
+  after looking at the week's runs when they do not.
+
+### Changed
+
+- The dashboard's plan screen shows a plan without a weekly pattern as
+  "Sessions" with the number scheduled, instead of an empty weekday grid.
+
+### Notes
+
+- Additive on the wire, and no migration. `startDate`, `weeks` and `days` are
+  always stored, derived from the sessions when there is no weekly pattern,
+  because iOS builds up to 1.0 (15) need all three to read the plan.
+- On those builds a plan made only of dated sessions shows them in the
+  calendar, but its card and detail screen have no line for them. iOS build
+  1.0 (16) names the next sessions there.
+- Completion still matches by date: a dated session done on another day
+  stays open.
+
 ## [0.1.25] — 2026-11-23
 
 ### Added
