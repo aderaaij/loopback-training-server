@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 
@@ -95,26 +95,53 @@ class ScheduleRoutineRef(BaseModel):
     routine_id: str | None = Field(default=None, alias="routineId")
 
 
-class PlanSchedule(BaseModel):
-    """A weekly recurrence: which routine runs on which weekday, for N weeks."""
+class ScheduleSession(BaseModel):
+    """One strength session on its own date, outside any weekly pattern."""
 
     model_config = ConfigDict(populate_by_name=True)
 
-    start_date: date = Field(alias="startDate")
-    weeks: int = Field(ge=1, le=52)
-    days: dict[str, ScheduleRoutineRef]
+    date: date
+    title: str = Field(min_length=1, max_length=200)
+    routine_id: str | None = Field(default=None, alias="routineId")
+
+
+class ScheduleSessionMove(BaseModel):
+    to: date
+
+
+class PlanSchedule(BaseModel):
+    """When a strength plan's sessions happen: a weekly recurrence (which
+    routine on which weekday, for N weeks), individual dated sessions, or both.
+
+    ``skip_dates`` takes single occurrences out of the weekly recurrence, which
+    is how one week's session is dropped or moved without touching the rest.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    start_date: date | None = Field(default=None, alias="startDate")
+    weeks: int | None = Field(default=None, ge=1, le=52)
+    days: dict[str, ScheduleRoutineRef] = Field(default_factory=dict)
+    sessions: list[ScheduleSession] = Field(default_factory=list)
+    skip_dates: list[date] = Field(default_factory=list, alias="skipDates")
     time: str | None = None  # optional "HH:MM" default time of day
     timezone: str | None = None
 
     @field_validator("days")
     @classmethod
     def _validate_weekdays(cls, v: dict[str, ScheduleRoutineRef]) -> dict[str, ScheduleRoutineRef]:
-        if not v:
-            raise ValueError("schedule must define at least one weekday")
         bad = [k for k in v if k not in WEEKDAYS]
         if bad:
             raise ValueError(f"invalid weekday keys {bad}; use {list(WEEKDAYS)}")
         return v
+
+    @model_validator(mode="after")
+    def _has_something_to_schedule(self):
+        if not self.days and not self.sessions:
+            raise ValueError("schedule must define at least one weekday or one dated session")
+        if self.days and (self.start_date is None or self.weeks is None):
+            raise ValueError("a weekly schedule needs startDate and weeks")
+        return self
 
 
 class ScheduledSession(BaseModel):
@@ -126,6 +153,8 @@ class ScheduledSession(BaseModel):
     weekday: str
     title: str
     routine_id: str | None = Field(default=None, serialization_alias="routineId")
+    # False for an individual dated session, True for a weekly occurrence.
+    recurring: bool = True
     conflict: bool = False
     conflicts_with: list[str] = Field(default_factory=list, serialization_alias="conflictsWith")
 

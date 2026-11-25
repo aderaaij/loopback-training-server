@@ -23,6 +23,96 @@ System screen.
   workout recorded for it). A strength session's `workoutId` is the strength
   workout on the same day, the earliest if there are several.
 
+## [0.1.27] — 2026-11-25
+
+### Added
+
+- **Fuelling on a workout.** The athlete can record what they drank and ate
+  on a workout, and a planned session can carry a fuelling plan. This is
+  entered by hand and is separate from the nutrition sync, which is daily
+  totals read from Health.
+  - **Saved products**, `/api/fuel/products` (list, create, change, delete):
+    a gel or a drink mix saved once, with its carbohydrates and caffeine, and
+    for a drink the serving those are for.
+  - **The log on a workout**, `/api/workouts/{id}/fuel`: `GET` returns what
+    was taken with its totals and hourly rates, next to the plan of the
+    session the workout counts for. `POST` adds one entry, `PUT` replaces the
+    list.
+  - **The plan on a session**, `/api/workouts/queue/{id}/fuel`, with the same
+    three methods.
+  - `GET /api/fuel/history` lists the latest workouts that have a log.
+  - A drink is one entry with the total volume; a gel or anything else is an
+    entry of its own, with where in the workout it was taken (meters). An
+    entry made from a product copies its name and figures, so changing or
+    deleting the product leaves the record as it was.
+- **Seven coach tools:** `get_fuel_products`, `add_fuel_product`,
+  `get_fuel_history`, `get_workout_fuel`, `log_workout_fuel`, `get_fuel_plan`
+  and `set_fuel_plan`. The coach can read how a long run was fuelled, log
+  what the athlete tells it, and write the plan for the next one from the
+  athlete's own products and earlier logs.
+- **A pace calculator for the coach.** New coach tool `calculate_pace`: give
+  two of a distance (`race` or `distance_m`), a `time` and a `pace`, and it
+  returns the third, the pace per km and per mile, the speed in m/s for a
+  workout's pace alert, and the split times at every km or mile and at 5K,
+  10K, half and 30K. The coach is told to use it for every target pace,
+  finish time and split it quotes, rather than doing the arithmetic itself.
+  It converts between the numbers and does not judge whether a pace is
+  realistic. The iOS app has the same calculator.
+
+### Notes
+
+- Shared with the coach under the existing **nutrition** category: without
+  it the seven tools are not offered and the endpoints answer 403 to the
+  coach. The app and the dashboard are not filtered.
+- Migration `e7f8a9b0c1d2` adds `fuel_product` and `fuel_entry`. Nothing
+  existing changes, and older app builds are unaffected.
+- Fuelling is camelCase on the wire; volumes in ml, carbohydrates in g,
+  caffeine in mg, positions in meters.
+- `calculate_pace` has no endpoint and stores nothing, and it is offered
+  whatever the athlete shares.
+
+## [0.1.26] — 2026-11-25
+
+### Added
+
+- **Strength sessions on individual dates.** A strength plan's schedule could
+  only repeat weekly, so an athlete without fixed gym days got every session
+  on the wrong date, and none were ticked off because completion is matched
+  by date. `metadata.schedule` can now hold `sessions`
+  (`[{date, title, routineId}]`) next to or instead of the weekly pattern,
+  and `skipDates` that take single occurrences out of the pattern.
+  `PUT /api/plans/{id}/schedule` accepts dated sessions with or without a
+  pattern.
+- **Add, move or remove one session.**
+  `POST /api/plans/{id}/schedule/sessions` adds a session on a date, and
+  starts a schedule on a plan without one.
+  `DELETE /api/plans/{id}/schedule/sessions/{date}` removes the sessions on
+  a date, and `POST /api/plans/{id}/schedule/sessions/{date}/move` moves
+  them (`{"to": "YYYY-MM-DD"}`). Removing or moving an occurrence of the
+  weekly pattern changes that week only.
+- Each session in a resolved schedule has **`recurring`**: false for a
+  session on its own date, true for an occurrence of the weekly pattern.
+- **Three new coach tools:** `add_strength_session`, `move_strength_session`
+  and `remove_strength_session`. The coaching playbook tells the coach to ask
+  whether the athlete lifts on fixed days, and to place individual sessions
+  after looking at the week's runs when they do not.
+
+### Changed
+
+- The dashboard's plan screen shows a plan without a weekly pattern as
+  "Sessions" with the number scheduled, instead of an empty weekday grid.
+
+### Notes
+
+- Additive on the wire, and no migration. `startDate`, `weeks` and `days` are
+  always stored, derived from the sessions when there is no weekly pattern,
+  because iOS builds up to 1.0 (15) need all three to read the plan.
+- On those builds a plan made only of dated sessions shows them in the
+  calendar, but its card and detail screen have no line for them. iOS build
+  1.0 (16) names the next sessions there.
+- Completion still matches by date: a dated session done on another day
+  stays open.
+
 ## [0.1.25] — 2026-11-23
 
 ### Added

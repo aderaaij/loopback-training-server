@@ -379,6 +379,20 @@ class TrainingClient:
         """Set (replace) a plan's recurring weekly schedule."""
         return await self._request("PUT", f"/api/plans/{plan_id}/schedule", json=schedule)
 
+    async def add_plan_schedule_session(self, plan_id: str, session: dict) -> list | dict:
+        """Add one strength session on its own date."""
+        return await self._request("POST", f"/api/plans/{plan_id}/schedule/sessions", json=session)
+
+    async def remove_plan_schedule_session(self, plan_id: str, day: str) -> list | dict:
+        """Take the session(s) on one date off a plan's schedule."""
+        return await self._request("DELETE", f"/api/plans/{plan_id}/schedule/sessions/{day}")
+
+    async def move_plan_schedule_session(self, plan_id: str, day: str, to: str) -> list | dict:
+        """Move the session(s) on one date to another date."""
+        return await self._request(
+            "POST", f"/api/plans/{plan_id}/schedule/sessions/{day}/move", json={"to": to}
+        )
+
     async def clear_plan_schedule(self, plan_id: str) -> list | dict:
         """Remove a plan's recurring schedule."""
         return await self._request("DELETE", f"/api/plans/{plan_id}/schedule")
@@ -517,6 +531,38 @@ class TrainingClient:
     async def put_setback_checkin(self, setback_id: str, day: str, checkin: dict) -> list | dict:
         """Record how the athlete felt on one day of a setback."""
         return await self._request("PUT", f"/api/setbacks/{setback_id}/checkins/{day}", json=checkin)
+
+    async def list_fuel_products(self) -> list | dict:
+        """The athlete's saved drinks, gels and other fuel."""
+        return await self._request("GET", "/api/fuel/products")
+
+    async def create_fuel_product(self, product: dict) -> list | dict:
+        """Save a product."""
+        return await self._request("POST", "/api/fuel/products", json=product)
+
+    async def get_fuel_history(self, limit: int = 10) -> list | dict:
+        """The latest workouts with a fuelling log, each with its plan."""
+        return await self._request("GET", "/api/fuel/history", params={"limit": limit})
+
+    async def get_workout_fuel(self, workout_id: str) -> list | dict:
+        """What was taken on a workout, next to what was planned."""
+        return await self._request("GET", f"/api/workouts/{workout_id}/fuel")
+
+    async def add_workout_fuel(self, workout_id: str, entry: dict) -> list | dict:
+        """Add one entry to a workout's fuelling log."""
+        return await self._request("POST", f"/api/workouts/{workout_id}/fuel", json=entry)
+
+    async def set_workout_fuel(self, workout_id: str, entries: list[dict]) -> list | dict:
+        """Replace a workout's fuelling log."""
+        return await self._request("PUT", f"/api/workouts/{workout_id}/fuel", json={"entries": entries})
+
+    async def get_session_fuel(self, session_id: str) -> list | dict:
+        """The fuelling plan on a planned session."""
+        return await self._request("GET", f"/api/workouts/queue/{session_id}/fuel")
+
+    async def set_session_fuel(self, session_id: str, entries: list[dict]) -> list | dict:
+        """Replace the fuelling plan on a planned session."""
+        return await self._request("PUT", f"/api/workouts/queue/{session_id}/fuel", json={"entries": entries})
 
     async def get_data_consent(self) -> dict:
         """Which data categories this athlete shares with the coach.

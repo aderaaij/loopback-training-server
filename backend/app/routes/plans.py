@@ -12,7 +12,7 @@ from app.models.queue import WorkoutQueue
 from app.models.user import User
 from app.models.workout import Workout
 from app.routes.schedule import STRENGTH_ACTIVITY
-from app.schedule_utils import resolve_sessions
+from app.schedule_utils import normalize_schedule, resolve_sessions
 from app.schemas.plan import (
     PlanCompleteRequest,
     PlanCompleteResponse,
@@ -23,6 +23,8 @@ from app.schemas.plan import (
     PlanScheduleResponse,
     PlanUpdate,
     ScheduledSession,
+    ScheduleSession,
+    ScheduleSessionMove,
 )
 from app.schemas.queue import QueueItemRead
 from app.schemas.validation import PlanValidateResponse
@@ -149,6 +151,7 @@ def _build_schedule_response(db: DbSession, user: User, plan: Plan) -> PlanSched
             weekday=s["weekday"],
             title=s["title"],
             routine_id=s["routineId"],
+            recurring=s["recurring"],
             conflict=bool(conflict_titles),
             conflicts_with=conflict_titles,
         ))
@@ -337,18 +340,13 @@ def get_plan_schedule(plan_id: uuid.UUID, db: DbSession, user: CurrentUser):
     return _build_schedule_response(db, user, plan)
 
 
-@router.put("/{plan_id}/schedule", response_model=PlanScheduleResponse)
-def set_plan_schedule(plan_id: uuid.UUID, payload: PlanSchedule, db: DbSession, user: CurrentUser):
-    """Set (replace) the plan's recurring weekly schedule. Stored on
-    plan.metadata.schedule; the response includes the resolved dates and any
-    run conflicts as warnings (conflicts are surfaced, not blocked).
-
-    Rejects a non-strength plan: a schedule marks recurring gym days, and
-    hanging one on a running plan silently mis-types everything downstream —
-    the plan's session counts absorb the strength days, and the iOS app renders
-    it as a gym cycle purely because a schedule is present. Guarded on write
-    only; readers stay permissive so an existing plan can't 404 retroactively.
-    """
+def _strength_plan(db: DbSession, user: User, plan_id: uuid.UUID) -> Plan:
+    """The plan, for a schedule write. Rejects a non-strength plan: a schedule
+    marks gym days, and hanging one on a running plan silently mis-types
+    everything downstream — the plan's session counts absorb the strength
+    days, and the iOS app renders it as a gym cycle purely because a schedule
+    is present. Guarded on write only; readers stay permissive so an existing
+    plan can't 404 retroactively."""
     plan = get_owned(db, Plan, plan_id, user)
     if plan.activity_type != "strength":
         raise HTTPException(
@@ -359,17 +357,102 @@ def set_plan_schedule(plan_id: uuid.UUID, payload: PlanSchedule, db: DbSession, 
                 f"plan for the gym cycle."
             ),
         )
+    return plan
+
+
+def _store_schedule(db: DbSession, user: User, plan: Plan, schedule: dict) -> PlanScheduleResponse:
+    """Write a schedule back to the plan; one with nothing left in it is removed."""
     metadata = dict(plan.metadata_ or {})
-    metadata["schedule"] = payload.model_dump(by_alias=True, mode="json", exclude_none=True)
+    normalized = normalize_schedule(schedule)
+    if normalized is None:
+        metadata.pop("schedule", None)
+    else:
+        metadata["schedule"] = normalized
     plan.metadata_ = metadata
     db.commit()
     db.refresh(plan)
     return _build_schedule_response(db, user, plan)
 
 
+def _sessions_on(schedule: dict, day: date) -> list[dict]:
+    found = [s for s in resolve_sessions(schedule) if s["date"] == day]
+    if not found:
+        raise HTTPException(status_code=404, detail=f"No strength session scheduled on {day.isoformat()}")
+    return found
+
+
+def _without_day(schedule: dict, day: date, found: list[dict]) -> dict:
+    """The schedule with every session on `day` taken out: individual ones are
+    dropped, and a weekly occurrence is skipped for that date only."""
+    out = dict(schedule)
+    out["sessions"] = [s for s in out.get("sessions") or [] if str(s.get("date"))[:10] != day.isoformat()]
+    if any(s["recurring"] for s in found):
+        out["skipDates"] = [*(out.get("skipDates") or []), day.isoformat()]
+    return out
+
+
+@router.put("/{plan_id}/schedule", response_model=PlanScheduleResponse)
+def set_plan_schedule(plan_id: uuid.UUID, payload: PlanSchedule, db: DbSession, user: CurrentUser):
+    """Set (replace) the plan's schedule: a weekly recurrence, individual
+    dated sessions, or both. Stored on plan.metadata.schedule; the response
+    includes the resolved dates and any run conflicts as warnings (conflicts
+    are surfaced, not blocked). Strength plans only.
+    """
+    plan = _strength_plan(db, user, plan_id)
+    return _store_schedule(db, user, plan, payload.model_dump(by_alias=True, mode="json", exclude_none=True))
+
+
+@router.post("/{plan_id}/schedule/sessions", response_model=PlanScheduleResponse)
+def add_schedule_session(plan_id: uuid.UUID, payload: ScheduleSession, db: DbSession, user: CurrentUser):
+    """Add one strength session on its own date, leaving the rest of the
+    schedule alone. Starts a schedule when the plan has none, so a plan can be
+    made of individual sessions only. Adding the same title on the same date
+    again replaces it."""
+    plan = _strength_plan(db, user, plan_id)
+    schedule = dict((plan.metadata_ or {}).get("schedule") or {})
+    schedule["sessions"] = [
+        *(schedule.get("sessions") or []),
+        payload.model_dump(by_alias=True, mode="json", exclude_none=True),
+    ]
+    return _store_schedule(db, user, plan, schedule)
+
+
+@router.delete("/{plan_id}/schedule/sessions/{day}", response_model=PlanScheduleResponse)
+def remove_schedule_session(plan_id: uuid.UUID, day: date, db: DbSession, user: CurrentUser):
+    """Take the session(s) on one date off the schedule. An individual session
+    is removed; a weekly occurrence is skipped for that date and keeps
+    recurring. 404 when nothing is scheduled that day."""
+    plan = _strength_plan(db, user, plan_id)
+    schedule = dict((plan.metadata_ or {}).get("schedule") or {})
+    return _store_schedule(db, user, plan, _without_day(schedule, day, _sessions_on(schedule, day)))
+
+
+@router.post("/{plan_id}/schedule/sessions/{day}/move", response_model=PlanScheduleResponse)
+def move_schedule_session(
+    plan_id: uuid.UUID, day: date, payload: ScheduleSessionMove, db: DbSession, user: CurrentUser
+):
+    """Move the session(s) on one date to another date, keeping title and
+    routine. A weekly occurrence moves for that week only. 404 when nothing is
+    scheduled on the date moved from."""
+    plan = _strength_plan(db, user, plan_id)
+    schedule = dict((plan.metadata_ or {}).get("schedule") or {})
+    found = _sessions_on(schedule, day)
+    if payload.to == day:
+        return _build_schedule_response(db, user, plan)
+    moved = _without_day(schedule, day, found)
+    moved["sessions"] = [
+        *moved["sessions"],
+        *(
+            {"date": payload.to.isoformat(), "title": s["title"], "routineId": s["routineId"]}
+            for s in found
+        ),
+    ]
+    return _store_schedule(db, user, plan, moved)
+
+
 @router.delete("/{plan_id}/schedule", response_model=PlanScheduleResponse)
 def clear_plan_schedule(plan_id: uuid.UUID, db: DbSession, user: CurrentUser):
-    """Remove the plan's recurring schedule."""
+    """Remove the plan's whole schedule, weekly pattern and dated sessions alike."""
     plan = get_owned(db, Plan, plan_id, user)
     metadata = dict(plan.metadata_ or {})
     metadata.pop("schedule", None)

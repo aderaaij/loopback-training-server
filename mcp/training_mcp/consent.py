@@ -51,6 +51,16 @@ TOOL_DOMAINS: dict[str, tuple[str, ...]] = {
     "log_setback_status": (RECOVERY,),
     "get_nutrition": (NUTRITION,),
     "get_nutrition_summary": (NUTRITION,),
+    # Fuelling (what is drunk and eaten on a workout, and planned) is entered
+    # by hand, but it is still what the athlete eats; the backend 403s the
+    # same calls for a consent-scoped caller.
+    "get_fuel_products": (NUTRITION,),
+    "add_fuel_product": (NUTRITION,),
+    "get_fuel_history": (NUTRITION,),
+    "get_workout_fuel": (NUTRITION,),
+    "log_workout_fuel": (NUTRITION,),
+    "get_fuel_plan": (NUTRITION,),
+    "set_fuel_plan": (NUTRITION,),
 }
 
 _TTL_SECONDS = 60.0
