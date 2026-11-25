@@ -10,7 +10,7 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
-## [Unreleased]
+## [0.1.28] — 2026-11-25
 
 ### Added
 
@@ -22,6 +22,11 @@ System screen.
   fields, `queueId` (the queue item behind a run) and `workoutId` (the
   workout recorded for it). A strength session's `workoutId` is the strength
   workout on the same day, the earliest if there are several.
+
+### Notes
+
+- Additive on the wire, and no migration. The iOS app ignores the two new
+  fields.
 
 ## [0.1.27] — 2026-11-25
 
