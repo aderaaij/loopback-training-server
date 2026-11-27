@@ -10,7 +10,7 @@ The companion iOS app lives at [aderaaij/loopback-training-app](https://github.c
 - **Database:** PostgreSQL 16 with SQLAlchemy 2.0 ORM, Alembic migrations
 - **Package manager:** uv
 - **Frontend:** React 19 + TypeScript SPA ("Loopback", in `frontend/`) — Vite 8, React Compiler, TanStack Query, react-router, hand-rolled SVG charts, Leaflet route maps
-- **MCP Server:** FastMCP 2.0 (in `mcp/`)
+- **MCP Server:** FastMCP (in `mcp/`; 3.1.1, pinned together with the MCP SDK in `backend/pyproject.toml`)
 - **Infrastructure:** Docker Compose (`docker-compose.yml`)
 
 ## Project Structure
@@ -533,4 +533,9 @@ coach's four paths only). Things worth not re-deriving:
   separate one: the host's own Serve entries keep working, since they point at
   `127.0.0.1:8001`, which stays published.
 
-This deployment is served by **Tailscale Serve, tailnet-only** (HTTPS on :8443 → `127.0.0.1:8001`, Let's Encrypt cert managed by Tailscale) for iPhone app access. It is **not** on Funnel: the hostname has no public DNS record and nothing is reachable from the internet (verified 2026-11-13 with `tailscale serve status` on the host; earlier versions of this file said Funnel). Cloud-hosted MCP connectors (claude.ai, mobile) therefore cannot reach it.
+This deployment has two ways in since 2026-11-27, both Tailscale:
+
+- **The host's own Tailscale Serve, tailnet-only** (HTTPS on :8443 → `127.0.0.1:8001`, Let's Encrypt cert managed by Tailscale), which is what the iPhone app and Claude Desktop use. That hostname has no public DNS record and is not on Funnel (verified 2026-11-13 with `tailscale serve status` on the host; earlier versions of this file said Funnel).
+- **The Tailscale add-on** (`deploy/tailscale/tailscale.yml`, above), as a second tailnet device of the server's own. Through Funnel it puts the coach, and only the coach, on the internet (`/mcp`, `/oauth/token` and the two discovery documents), which is how claude.ai reaches it; the same device serves everything on its port 8443 to the tailnet. The host's `.env` lists the gitignored `docker-compose.override.yml` in `COMPOSE_FILE` next to the add-on, and sets `PUBLIC_URL` to the add-on device's address, because the dashboard is also opened at the host's own name, whose port 443 belongs to another service.
+
+Port 8001 is published on the host's loopback only since the add-on, so the plain `http://<host>:8001` no longer answers from other devices.
