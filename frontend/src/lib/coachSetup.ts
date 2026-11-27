@@ -12,7 +12,7 @@ export interface CoachClient {
 
 export const COACH_CLIENTS: CoachClient[] = [
   { id: 'claude-desktop', label: 'Claude Desktop' },
-  { id: 'claude', label: 'Claude (web & phone)' },
+  { id: 'claude', label: 'Claude (web, phone, desktop)' },
   { id: 'claude-code', label: 'Claude Code' },
   { id: 'cursor', label: 'Cursor' },
   { id: 'vscode', label: 'VS Code' },
@@ -82,21 +82,24 @@ export function buildCoachSetup(client: CoachClientId, url: string, token: strin
           'messages between Claude Desktop and this server.',
       }
     case 'claude':
-      // claude.ai and the Claude phone apps connect from Anthropic's servers,
-      // not from the athlete's device, and cannot be given a header: they
-      // sign in. The same steps work in Claude Desktop's Connectors screen.
+      // Claude's own apps connect from Anthropic's servers, not from the
+      // athlete's device, and cannot be given a header: they sign in. The
+      // connector belongs to the Claude account, so setting it up once, from
+      // the web or from Claude Desktop's Connectors screen, covers them all.
       return {
         steps: [
           'In Claude, open Settings → Connectors and choose “Add custom connector”.',
           'Paste the address below and add it.',
           'Click Connect. Claude sends you to this server to sign in and approve, then back.',
+          'That is all: the coach is now in Claude on the web, in the phone apps and in Claude Desktop.',
         ],
         snippet: url,
         snippetHasToken: false,
         signIn: true,
         note:
           'Claude connects from Anthropic’s servers, so this works only when the address below can be reached ' +
-          'from the internet. For a server that is only on your home network or tailnet, use Claude Desktop instead.',
+          'from the internet. For a server that is only on your home network or tailnet, pick Claude Desktop, ' +
+          'which connects through an extension instead.',
       }
     case 'claude-code':
       return {

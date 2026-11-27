@@ -10,6 +10,14 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [Unreleased]
+
+### Changed
+
+- The Connect dialog's entry for signing in is now called **Claude (web,
+  phone, desktop)** and says that one sign-in covers all of Claude's apps. It
+  read as if the web, the phone and the desktop app each needed setting up.
+
 ## [0.1.31] — 2026-11-27
 
 ### Fixed
