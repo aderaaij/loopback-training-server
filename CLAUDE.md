@@ -373,7 +373,7 @@ The MCP server (`mcp/`) exposes training data to Claude via FastMCP. It talks to
     address. Not done; the Connect dialog and the README say what to expect instead.
   - To see what Claude Desktop did: `~/Library/Logs/Claude/mcp-server-Loopback Coach.log`
     and `main.log` on macOS, next to whether a `POST /mcp` reached the server at all.
-- **Signing in from an assistant (OAuth; unreleased after 0.1.29).** claude.ai, the Claude
+- **Signing in from an assistant (OAuth, since 0.1.30).** claude.ai, the Claude
   phone apps and Claude Desktop's connector dialog cannot be given a header, so `/mcp` also
   accepts an assistant that signs in: paste the address, approve in the dashboard. The flow
   and the reasoning are in the docstring of `backend/app/oauth.py`; routes in
@@ -484,8 +484,7 @@ re-deriving:
   Caddy file sets `*`, which is sound only because the same file makes port 8001
   loopback-only; the two settings must stay together.
 
-**Tailscale add-on (`deploy/tailscale/tailscale.yml` + `serve.json`, unreleased after
-0.1.29):** enabled with `COMPOSE_FILE=docker-compose.yml:deploy/tailscale/tailscale.yml`.
+**Tailscale add-on (`deploy/tailscale/tailscale.yml` + `serve.json`, since 0.1.30):** enabled with `COMPOSE_FILE=docker-compose.yml:deploy/tailscale/tailscale.yml`.
 A `tailscale/tailscale` container that is a tailnet device of the server's own, with two
 entrances on one name: 8443 for the tailnet (everything) and 443 through Funnel (the
 coach's four paths only). Things worth not re-deriving:
