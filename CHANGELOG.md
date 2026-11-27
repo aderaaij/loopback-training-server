@@ -10,6 +10,19 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [0.1.31] — 2026-11-27
+
+### Fixed
+
+- **The Tailscale add-on's sign-in link only worked for a minute.** The
+  container gave up waiting after 60 seconds, restarted and printed a new
+  link. A link opened later than that signed in a key that no longer existed:
+  the Tailscale admin console gained a dead device called `loopback`, and the
+  server was still not on the tailnet. The add-on now waits on one link for as
+  long as it takes. If you were caught by this, remove the dead `loopback`
+  device in the admin console before signing in again, or the real one is
+  named `loopback-1`. Setting `TS_AUTHKEY` was not affected.
+
 ## [0.1.30] — 2026-11-27
 
 ### Added

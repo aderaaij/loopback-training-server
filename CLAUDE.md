@@ -511,6 +511,16 @@ coach's four paths only). Things worth not re-deriving:
   Funnel caller and the 100.x address for a tailnet one.
 - **Joining the tailnet needs no auth key**: without `TS_AUTHKEY` the container logs a
   login link. The device's identity is in the `tailscale_state` volume.
+- ⚠️ **The image's own start-up (`containerboot`) gives a person 60 seconds to use that
+  link**, then exits with "tailscale up failed: context deadline exceeded"; the restart
+  makes a new node key and a new link. A link approved late signs in the *old* key: the
+  tailnet gains a dead device by the chosen name and the next real one becomes
+  `<name>-1`. 0.1.30 shipped with this, because the one test of the link flow was
+  approved after 51 seconds; it failed on first real use. Since 0.1.31 the service's
+  `command` signs in first with a plain `tailscaled` + `tailscale login` (no time
+  limit), only when the state says `NeedsLogin` and there is no `TS_AUTHKEY`, and then
+  `exec`s containerboot. Not `tailscale up` for that step: on a node that containerboot
+  has already configured it refuses to run without all the flags containerboot used.
 - Funnel has to be allowed for the device by the tailnet's policy (`funnel` node
   attribute) and HTTPS certificates enabled; without Funnel the tailnet entrance still
   works. A new Funnel name is found by scanners within a minute of its certificate.
