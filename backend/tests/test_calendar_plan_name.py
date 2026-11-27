@@ -74,3 +74,40 @@ def test_run_and_strength_both_named(client_a):
     by_kind = {e["kind"]: e for e in entries}
     assert by_kind["run"]["planName"] == "Phase 2 – Base Build"
     assert by_kind["strength"]["planName"] == "Return to Lifting"
+
+
+# ── a plan that is someone else's ──
+
+RUN = {"activityType": "running", "title": "Easy 5K", "scheduledDate": TS}
+
+
+def test_a_run_cannot_be_hung_on_someone_elses_plan(client_a, client_b):
+    theirs = make_plan(client_b, "Bob's marathon block")
+    unknown = "00000000-0000-4000-8000-000000000000"
+
+    # Someone else's plan and one that does not exist get the same answer, so
+    # the reply does not say which ids are real.
+    for plan_id in (theirs, unknown):
+        assert client_a.post("/api/queue", json={**RUN, "planId": plan_id}).status_code == 404
+        assert client_a.post("/api/queue/batch", json=[RUN, {**RUN, "planId": plan_id}]).status_code == 404
+        mine = queue_run(client_a)
+        assert client_a.patch(f"/api/queue/{mine}", json={"planId": plan_id}).status_code == 404
+        assert client_a.delete(f"/api/queue/{mine}").status_code in (200, 204)
+
+    # Nothing was queued by the refused requests, the batch included.
+    assert client_a.get("/api/queue").json() == []
+
+
+def test_the_calendar_names_only_the_athletes_own_plans(client_a, client_b, user_a, session_factory):
+    """A row that already points at someone else's plan gives nothing away."""
+    from app.models.queue import WorkoutQueue
+
+    theirs = make_plan(client_b, "Bob's marathon block")
+    item = queue_run(client_a)
+    with session_factory() as db:
+        db.get(WorkoutQueue, item).plan_id = theirs
+        db.commit()
+
+    (run,) = calendar_entries(client_a)
+    assert run["planId"] == theirs
+    assert run["planName"] is None

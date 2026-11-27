@@ -6,6 +6,7 @@ from sqlalchemy import select
 
 from app.auth import CurrentUser
 from app.database import DbSession
+from app.models.plan import Plan
 from app.models.queue import WorkoutQueue
 from app.schemas.queue import (
     QueueBatchCreatedResponse,
@@ -59,8 +60,20 @@ def list_queue(
     return db.scalars(q).all()
 
 
+def _own_plan(db, user, plan_id: uuid.UUID | None) -> None:
+    """404 unless the plan a run is being hung on is the caller's own.
+
+    The column is a plain foreign key, so without this a run could point at
+    another athlete's plan, and the calendar would then show that plan's name.
+    A plan that does not exist gets the same answer as someone else's.
+    """
+    if plan_id is not None:
+        get_owned(db, Plan, plan_id, user)
+
+
 @router.post("", response_model=QueueItemCreatedRead, status_code=status.HTTP_201_CREATED)
 def create_queue_item(payload: QueueItemCreate, db: DbSession, user: CurrentUser):
+    _own_plan(db, user, payload.plan_id)
     item = WorkoutQueue(
         user_id=user.id,
         activity_type=payload.activity_type,
@@ -81,6 +94,9 @@ def create_queue_item(payload: QueueItemCreate, db: DbSession, user: CurrentUser
 
 @router.post("/batch", response_model=QueueBatchCreatedResponse, status_code=status.HTTP_201_CREATED)
 def create_queue_items_batch(payload: list[QueueItemCreate], db: DbSession, user: CurrentUser):
+    # Before anything is added: one bad plan refuses the whole batch.
+    for plan_id in {p.plan_id for p in payload}:
+        _own_plan(db, user, plan_id)
     items = []
     for p in payload:
         item = WorkoutQueue(
@@ -123,6 +139,7 @@ def update_queue_item(item_id: uuid.UUID, payload: QueueItemUpdate, db: DbSessio
     if payload.scheduled_date is not None:
         item.scheduled_date = payload.scheduled_date
     if payload.plan_id is not None:
+        _own_plan(db, user, payload.plan_id)
         item.plan_id = payload.plan_id
 
     db.commit()

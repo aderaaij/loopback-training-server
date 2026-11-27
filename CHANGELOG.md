@@ -50,6 +50,14 @@ System screen.
 - The page that asks you to approve an assistant now also says what it cannot
   do, and **New token** points to Connect for assistants.
 
+### Fixed
+
+- **A scheduled workout could be attached to another athlete's plan**, and the
+  calendar then showed that plan's name. It took knowing the plan's id, which
+  is random and shown to nobody else, so on a household server this was
+  unlikely to have been used. A workout can now only be attached to a plan of
+  your own, and the calendar only names your own plans.
+
 ## [0.1.32] — 2026-11-27
 
 ### Fixed
