@@ -189,6 +189,42 @@ def test_the_approval_page_can_live_at_another_address(anon, monkeypatch):
     assert doc["token_endpoint"] == "http://testserver/oauth/token"
 
 
+# What deploy/tailscale sets: one name, the coach on the standard port and
+# the dashboard on another. No name has to be written down for it.
+def test_the_approval_page_can_be_the_same_name_on_another_port(anon, monkeypatch):
+    monkeypatch.setattr(get_settings(), "oauth_authorization_port", 8443)
+    public = {"Host": "loopback.tailnet.example", "X-Forwarded-Proto": "https"}
+    doc = anon.get("/.well-known/oauth-authorization-server", headers=public).json()
+    assert doc["issuer"] == "https://loopback.tailnet.example"
+    assert doc["authorization_endpoint"] == "https://loopback.tailnet.example:8443/oauth/authorize"
+    assert doc["token_endpoint"] == "https://loopback.tailnet.example/oauth/token"
+
+    # Asked on the dashboard's own port, the server describes that entrance.
+    private = {"Host": "loopback.tailnet.example:8443", "X-Forwarded-Proto": "https"}
+    doc = anon.get("/.well-known/oauth-authorization-server", headers=private).json()
+    assert doc["issuer"] == "https://loopback.tailnet.example:8443"
+    assert doc["authorization_endpoint"] == "https://loopback.tailnet.example:8443/oauth/authorize"
+
+    # A name written down wins over a port.
+    monkeypatch.setattr(get_settings(), "oauth_authorization_origin", "https://elsewhere.example")
+    doc = anon.get("/.well-known/oauth-authorization-server", headers=public).json()
+    assert doc["authorization_endpoint"] == "https://elsewhere.example/oauth/authorize"
+
+
+@pytest.mark.parametrize(
+    "origin, port, expected",
+    [
+        ("https://host.example", 8443, "https://host.example:8443"),
+        ("https://host.example:8443", None, "https://host.example"),
+        ("https://host.example:8443", 443, "https://host.example"),
+        ("http://host.example:8001", 80, "http://host.example"),
+        ("https://[fd7a::1]:8443", 9000, "https://[fd7a::1]:9000"),
+    ],
+)
+def test_the_same_host_on_another_port(origin, port, expected):
+    assert oauth.on_port(origin, port) == expected
+
+
 def test_documents_are_not_cached(anon):
     assert anon.get("/.well-known/oauth-authorization-server").headers["cache-control"] == "no-store"
 

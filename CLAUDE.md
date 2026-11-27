@@ -406,7 +406,8 @@ The MCP server (`mcp/`) exposes training data to Claude via FastMCP. It talks to
     what Claude Code uses), and the page checks again before navigating. So an app that
     wants its code on a scheme of its own (`cursor://`) cannot sign in.
   - **The approval page can live at another address than everything the assistant calls**
-    (`OAUTH_AUTHORIZATION_ORIGIN`), because only the athlete's browser loads it. That lets a
+    (`OAUTH_AUTHORIZATION_ORIGIN`, or `OAUTH_AUTHORIZATION_PORT` when only the port
+    differs), because only the athlete's browser loads it. That lets a
     server publish `/mcp`, `/oauth/token` and the two discovery documents while the
     dashboard, and every page that takes a password, stays private. `/oauth/authorize`
     redirects to the approval page with a relative address so the browser stays on
@@ -432,8 +433,8 @@ The MCP server (`mcp/`) exposes training data to Claude via FastMCP. It talks to
     dashboard on tailnet-only Serve). Tailscale answers every other path itself with a 404,
     and `..`, `%2e%2e` and `//` do not get out of a forwarded path. A forwarded path is a
     prefix though, so `/mcp/anything` reaches the app: the catch-all in `main.py` answers
-    those with a 404 (`_NOT_DASHBOARD`) instead of the dashboard's HTML. Not packaged as a
-    compose add-on yet.
+    those with a 404 (`_NOT_DASHBOARD`) instead of the dashboard's HTML. Packaged as
+    `deploy/tailscale/tailscale.yml` (see Deployment).
   - The dashboard pages are sent with `X-Frame-Options: DENY` since this: a site that could
     frame the approval page could dress up its Allow button.
   - `fastapi run` wraps long access-log lines, so a `grep` for `/oauth/authorize` in the
@@ -482,7 +483,45 @@ re-deriving:
   `X-Forwarded-For` only for peers in `FORWARDED_ALLOW_IPS` (default: loopback only). The
   Caddy file sets `*`, which is sound only because the same file makes port 8001
   loopback-only; the two settings must stay together.
-- A Tailscale Funnel add-on file was drafted but not shipped: it could not be tested
-  without a tailnet auth key.
+
+**Tailscale add-on (`deploy/tailscale/tailscale.yml` + `serve.json`, unreleased after
+0.1.29):** enabled with `COMPOSE_FILE=docker-compose.yml:deploy/tailscale/tailscale.yml`.
+A `tailscale/tailscale` container that is a tailnet device of the server's own, with two
+entrances on one name: 8443 for the tailnet (everything) and 443 through Funnel (the
+coach's four paths only). Things worth not re-deriving:
+- **What is public is the list in `serve.json`**, which Tailscale applies itself
+  (`TS_SERVE_CONFIG`; `${TS_CERT_DOMAIN}` in it is filled in by the container, so no name
+  is written down). Every other path gets Tailscale's own 404. A path there is a prefix,
+  which is why `main.py` refuses `/mcp/…` and friends instead of serving the dashboard.
+  A new endpoint an assistant has to call needs a line in that file.
+- **No hostname is configured anywhere.** The add-on sets `OAUTH_AUTHORIZATION_PORT=8443`,
+  from which the server derives both directions: the approval page is the requesting
+  host on 8443 (`approval_origin`), and the coach's public address shown in the
+  dashboard's Connect dialog is the dashboard's host without the port
+  (`coach_url_for_dashboard`, served as `coachUrl` in `/api/config`). The discovery
+  documents themselves are never rewritten: asked on 8443 the server describes the 8443
+  entrance, or a client on the tailnet would be told a resource address that is not the
+  one it was given.
+- **It is its own container on the compose network, not a sidecar in the app's network
+  namespace**, for the reason given for Caddy above; `serve.json` proxies to `app:8001`.
+  It runs Tailscale's userspace networking (the image's default), so it needs no
+  `NET_ADMIN` and no `/dev/net/tun`; Serve and Funnel work in that mode.
+- **Same pair of settings as the Caddy file**, for the same reason: port 8001 on the
+  host's loopback only, and `FORWARDED_ALLOW_IPS=*`. Tailscale overwrites a forged
+  `X-Forwarded-For` (checked), so the audit trail showed the real public address for a
+  Funnel caller and the 100.x address for a tailnet one.
+- **Joining the tailnet needs no auth key**: without `TS_AUTHKEY` the container logs a
+  login link. The device's identity is in the `tailscale_state` volume.
+- Funnel has to be allowed for the device by the tailnet's policy (`funnel` node
+  attribute) and HTTPS certificates enabled; without Funnel the tailnet entrance still
+  works. A new Funnel name is found by scanners within a minute of its certificate.
+- Tested 2026-11-27 with the repo's own compose file plus the add-on on the dev Mac: a
+  whole sign-in through the two entrances with curl (Claude's real client document,
+  token, tool call), and the public side probed for everything else. Not repeated from
+  claude.ai itself with the container in the path; the same server build was, behind
+  host Tailscale.
+- With Tailscale already on the host (ardencore), the add-on's device is a second,
+  separate one: the host's own Serve entries keep working, since they point at
+  `127.0.0.1:8001`, which stays published.
 
 This deployment is served by **Tailscale Serve, tailnet-only** (HTTPS on :8443 → `127.0.0.1:8001`, Let's Encrypt cert managed by Tailscale) for iPhone app access. It is **not** on Funnel: the hostname has no public DNS record and nothing is reachable from the internet (verified 2026-11-13 with `tailscale serve status` on the host; earlier versions of this file said Funnel). Cloud-hosted MCP connectors (claude.ai, mobile) therefore cannot reach it.

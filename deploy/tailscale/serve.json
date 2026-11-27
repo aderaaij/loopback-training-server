@@ -1,0 +1,24 @@
+{
+  "TCP": {
+    "443": { "HTTPS": true },
+    "8443": { "HTTPS": true }
+  },
+  "Web": {
+    "${TS_CERT_DOMAIN}:443": {
+      "Handlers": {
+        "/mcp": { "Proxy": "http://app:8001/mcp" },
+        "/oauth/token": { "Proxy": "http://app:8001/oauth/token" },
+        "/.well-known/oauth-protected-resource": { "Proxy": "http://app:8001/.well-known/oauth-protected-resource" },
+        "/.well-known/oauth-authorization-server": { "Proxy": "http://app:8001/.well-known/oauth-authorization-server" }
+      }
+    },
+    "${TS_CERT_DOMAIN}:8443": {
+      "Handlers": {
+        "/": { "Proxy": "http://app:8001" }
+      }
+    }
+  },
+  "AllowFunnel": {
+    "${TS_CERT_DOMAIN}:443": true
+  }
+}

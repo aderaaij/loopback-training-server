@@ -35,8 +35,8 @@ Things worth not re-deriving:
   an address a stranger chose; FastMCP's fetcher refuses anything that is not
   public https and pins the address it resolved.
 - **Step 2 can live at another address than steps 1 and 3**
-  (`OAUTH_AUTHORIZATION_ORIGIN`), because only the athlete's browser ever
-  loads it. That is what lets a server keep its dashboard, and with it every
+  (`OAUTH_AUTHORIZATION_ORIGIN`, or `OAUTH_AUTHORIZATION_PORT` when only the
+  port differs), because only the athlete's browser ever loads it. That is what lets a server keep its dashboard, and with it every
   page that takes a password, on a private network while the coach endpoint
   is public. Checked against claude.ai on 2026-11-27.
 - **The server describes itself by the address a request arrived at**, taken
@@ -112,6 +112,42 @@ def public_origin(scope: MutableMapping[str, Any]) -> str:
     return f"{scheme}://{host}"
 
 
+def on_port(origin: str, port: int | None) -> str:
+    """The same scheme and host as `origin`, on another port (None: the scheme's own)."""
+    parts = urlsplit(origin)
+    host = parts.hostname or ""
+    if ":" in host:  # an IPv6 address, which urlsplit hands back without its brackets
+        host = f"[{host}]"
+    standard = {"http": 80, "https": 443}.get(parts.scheme)
+    return f"{parts.scheme}://{host}" + ("" if port is None or port == standard else f":{port}")
+
+
+def approval_origin(origin: str) -> str:
+    """Where the sign-in and approval pages are, for a server reached at `origin`."""
+    settings = get_settings()
+    if settings.oauth_authorization_origin:
+        return settings.oauth_authorization_origin
+    if settings.oauth_authorization_port:
+        return on_port(origin, settings.oauth_authorization_port)
+    return origin
+
+
+def coach_url_for_dashboard(origin: str) -> str | None:
+    """The coach's public address, for a dashboard opened at `origin`.
+
+    None when it is simply the dashboard's own address plus /mcp, which the
+    dashboard works out for itself. It differs when the server was told its
+    public address, or when the dashboard sits on a port of its own next to a
+    coach on the standard one.
+    """
+    settings = get_settings()
+    if settings.public_url:
+        return settings.public_url + MCP_PATH
+    if settings.oauth_authorization_port:
+        return on_port(origin, None) + MCP_PATH
+    return None
+
+
 def protected_resource_metadata(origin: str) -> dict[str, Any]:
     return {
         "resource": origin + MCP_PATH,
@@ -122,10 +158,9 @@ def protected_resource_metadata(origin: str) -> dict[str, Any]:
 
 
 def authorization_server_metadata(origin: str) -> dict[str, Any]:
-    authorize_origin = get_settings().oauth_authorization_origin or origin
     return {
         "issuer": origin,
-        "authorization_endpoint": authorize_origin + AUTHORIZE_PATH,
+        "authorization_endpoint": approval_origin(origin) + AUTHORIZE_PATH,
         "token_endpoint": origin + TOKEN_PATH,
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code"],

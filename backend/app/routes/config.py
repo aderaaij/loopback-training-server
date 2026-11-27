@@ -8,9 +8,10 @@ users. camelCase on the wire, like the other identity/config-shaped routes.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
+from app import oauth
 from app.config import Settings, get_settings
 
 router = APIRouter()
@@ -26,16 +27,16 @@ class MapConfigOut(BaseModel):
 
 class RuntimeConfigOut(BaseModel):
     map: MapConfigOut
-    # The coach endpoint's address when PUBLIC_URL says what it is, else null
-    # and the dashboard uses the address it was itself opened at. The two
-    # differ on a server whose coach endpoint is public and whose dashboard
-    # is not (see app/oauth.py), where an assistant needs the public one.
+    # The coach endpoint's public address when it is not simply the address
+    # the dashboard was opened at, else null. The two differ on a server
+    # whose coach endpoint is public and whose dashboard is not (see
+    # app/oauth.py), where an assistant in the cloud needs the public one.
     coachUrl: str | None = None
 
 
 @router.get("", response_model=RuntimeConfigOut)
-def get_runtime_config(settings: Annotated[Settings, Depends(get_settings)]) -> dict[str, object]:
+def get_runtime_config(request: Request, settings: Annotated[Settings, Depends(get_settings)]) -> dict[str, object]:
     return {
         "map": settings.map_tiles,
-        "coachUrl": f"{settings.public_url}/mcp" if settings.public_url else None,
+        "coachUrl": oauth.coach_url_for_dashboard(oauth.public_origin(request.scope)),
     }
