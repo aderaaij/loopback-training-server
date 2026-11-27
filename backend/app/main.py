@@ -153,6 +153,8 @@ def spa(full_path: str):
     if full_path.startswith(_NOT_DASHBOARD) or not SPA_INDEX.is_file():
         return JSONResponse({"detail": "Not Found"}, status_code=404)
     candidate = (SPA_DIST / full_path).resolve()
+    if candidate == SPA_INDEX:
+        return _dashboard()  # asked for by name: still the dashboard
     if candidate.is_file() and candidate.is_relative_to(SPA_DIST):
         return FileResponse(candidate)
     # /.well-known/* is read by programs, not people. An MCP client that got

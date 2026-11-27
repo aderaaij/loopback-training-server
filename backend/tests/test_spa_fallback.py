@@ -29,7 +29,7 @@ def test_client_side_routes_get_the_dashboard(spa):
 
 # Another site must not be able to show the dashboard inside its own page,
 # least of all the page where an assistant is approved.
-@pytest.mark.parametrize("path", ["/", "/workouts/123", "/oauth/consent?request=abc"])
+@pytest.mark.parametrize("path", ["/", "/index.html", "/workouts/123", "/oauth/consent?request=abc"])
 def test_the_dashboard_refuses_to_be_framed(spa, path):
     r = TestClient(app).get(path)
     assert r.headers["x-frame-options"] == "DENY"
