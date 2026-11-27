@@ -70,6 +70,10 @@ services:
       # Coach MCP at /mcp on this same port (on by default). Passes through
       # only when set in the root .env.
       - MCP_ENABLED
+      # Signing in to the coach from an assistant (README "MCP Server"). Both
+      # are optional and pass through only when set in the root .env.
+      - PUBLIC_URL
+      - OAUTH_AUTHORIZATION_ORIGIN
       # Behind a reverse proxy: whose X-Forwarded-For to trust for the client
       # address (see README "Configuration"). Passes through only when set;
       # deploy/https/caddy.yml sets it itself.

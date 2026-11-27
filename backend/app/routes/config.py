@@ -26,8 +26,16 @@ class MapConfigOut(BaseModel):
 
 class RuntimeConfigOut(BaseModel):
     map: MapConfigOut
+    # The coach endpoint's address when PUBLIC_URL says what it is, else null
+    # and the dashboard uses the address it was itself opened at. The two
+    # differ on a server whose coach endpoint is public and whose dashboard
+    # is not (see app/oauth.py), where an assistant needs the public one.
+    coachUrl: str | None = None
 
 
 @router.get("", response_model=RuntimeConfigOut)
-def get_runtime_config(settings: Annotated[Settings, Depends(get_settings)]) -> dict[str, dict[str, str]]:
-    return {"map": settings.map_tiles}
+def get_runtime_config(settings: Annotated[Settings, Depends(get_settings)]) -> dict[str, object]:
+    return {
+        "map": settings.map_tiles,
+        "coachUrl": f"{settings.public_url}/mcp" if settings.public_url else None,
+    }

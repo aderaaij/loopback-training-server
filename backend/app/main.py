@@ -16,7 +16,7 @@ from app.backup import run_scheduler
 from app.database import SessionLocal
 from app.mcp_mount import MCPDispatch, mcp_app
 from app.rate_limit import limiter
-from app.routes import actions, admin, auth, coach, config, feedback, fuel, health, health_metrics, inventory, me, nutrition, plan_notes, plans, queue, schedule, setbacks, shoes, sleep, workouts
+from app.routes import actions, admin, auth, coach, config, feedback, fuel, health, health_metrics, inventory, me, nutrition, oauth, plan_notes, plans, queue, schedule, setbacks, shoes, sleep, workouts
 from app.version import __version__
 
 
@@ -83,10 +83,20 @@ app.add_exception_handler(RateLimitExceeded, _rate_limited)
 # (replaced by the authenticated SPA below); it lives on in git history only.
 
 
+# The dashboard is never meant to be shown inside another site's page. With
+# the approval page for assistants (/oauth/consent) it matters: a site that
+# could frame it could dress up its Allow button as something else.
+_NO_FRAMING = {"X-Frame-Options": "DENY", "Content-Security-Policy": "frame-ancestors 'none'"}
+
+
+def _dashboard() -> FileResponse:
+    return FileResponse(SPA_INDEX, headers=_NO_FRAMING)
+
+
 @app.get("/", include_in_schema=False)
 def root():
     if SPA_INDEX.is_file():
-        return FileResponse(SPA_INDEX)
+        return _dashboard()
     return {"service": "training-api", "status": "ok"}
 
 
@@ -95,6 +105,11 @@ app.include_router(health.router, prefix="/api", tags=["health"])
 
 # Auth endpoints — login is public; me/revoke self-enforce via CurrentUser
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+
+# OAuth for the coach endpoint: discovery documents, /oauth/authorize and
+# /oauth/token. No token needed, and ahead of the catch-all at the bottom,
+# which would answer the /.well-known paths itself.
+app.include_router(oauth.public)
 
 # Authenticated routes
 api_router = APIRouter(prefix="/api", dependencies=[Depends(get_current_user)])
@@ -119,15 +134,23 @@ api_router.include_router(fuel.router, prefix="/fuel", tags=["fuel"])
 api_router.include_router(fuel.workout_router, prefix="/workouts", tags=["fuel"])
 api_router.include_router(fuel.session_router, prefix="/workouts/queue", tags=["fuel"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
+api_router.include_router(oauth.api, prefix="/oauth", tags=["oauth"])
 app.include_router(api_router)
 
 
 # SPA catch-all — registered last, so it only sees paths no API route matched.
 # Real build files (assets/, favicon) are served as-is; anything else gets
 # index.html so client-side routes like /workouts/<id> deep-link correctly.
+# Never dashboard pages: whatever sits under the API, the coach endpoint and
+# the two OAuth endpoints. It matters for a server that publishes only the
+# coach's paths (README "MCP Server"): a proxy forwards by prefix, so
+# /mcp/anything reaches this route, and would be answered with the dashboard.
+_NOT_DASHBOARD = ("api/", "mcp/", "oauth/token/", "oauth/authorize/")
+
+
 @app.get("/{full_path:path}", include_in_schema=False)
 def spa(full_path: str):
-    if full_path.startswith("api/") or not SPA_INDEX.is_file():
+    if full_path.startswith(_NOT_DASHBOARD) or not SPA_INDEX.is_file():
         return JSONResponse({"detail": "Not Found"}, status_code=404)
     candidate = (SPA_DIST / full_path).resolve()
     if candidate.is_file() and candidate.is_relative_to(SPA_DIST):
@@ -138,4 +161,4 @@ def spa(full_path: str):
     # server has no OAuth" and the client reports that instead.
     if full_path.startswith(".well-known/"):
         return JSONResponse({"detail": "Not Found"}, status_code=404)
-    return FileResponse(SPA_INDEX)
+    return _dashboard()

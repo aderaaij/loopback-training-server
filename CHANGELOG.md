@@ -10,6 +10,48 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [Unreleased]
+
+### Added
+
+- **Connect Claude on the web and phone by signing in.** claude.ai and the
+  Claude phone apps cannot be given a token, so until now they could not use
+  the coach at all. They can now be connected the way they expect: add the
+  server's address as a custom connector, click Connect, and approve it on a
+  page in the Loopback dashboard. Claude is handed a token of its own, which
+  shows up as **Coach · Claude** under **Settings → Devices & tokens** and is
+  revoked there like any other. Claude never sees a password.
+  - This is OAuth 2.1 with PKCE on the coach endpoint: discovery documents
+    under `/.well-known/`, `/oauth/authorize` and `/oauth/token`. A client
+    identifies itself with a published client metadata document; registering a
+    client with the server is not supported. Tokens do not expire and there are
+    no refresh tokens, as for every other coach token.
+  - Claude connects from Anthropic's servers, so this needs a server that can
+    be reached from the internet over HTTPS on port 443. A server on a home
+    network or tailnet keeps using the Claude Desktop extension.
+  - Only the coach has to be public. The pages you sign in and approve on are
+    opened by your own browser only, and `OAUTH_AUTHORIZATION_ORIGIN` puts
+    them on another address than the one the assistant connects to, so a
+    server can publish `/mcp`, `/oauth/token` and the two discovery documents
+    and keep its dashboard private.
+  - The server reads its own address from each request. `PUBLIC_URL` sets it
+    for a proxy that does not pass the original `Host` header on.
+  - **Settings → AI coach → Connect** has a **Claude (web & phone)** entry
+    with the address to paste.
+
+### Changed
+
+- **`/mcp` checks the token before opening a session.** It used to check only
+  that one was sent, and a wrong or revoked token found out from its first
+  tool call. It now answers 401 straight away, which is how an assistant that
+  signed in learns it has to do so again, and means a made-up token no longer
+  gets a session. The 401's `WWW-Authenticate` header names the discovery
+  document.
+- The dashboard's pages are sent with headers that stop another site from
+  showing them inside a frame.
+- Signing in after being sent to the login page returns you to the page you
+  were headed for.
+
 ## [0.1.29] — 2026-11-27
 
 ### Added

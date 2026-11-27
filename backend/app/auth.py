@@ -121,6 +121,24 @@ def get_current_user(
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
+def token_is_live(raw_token: str) -> bool:
+    """Whether `get_current_user` would accept this token right now.
+
+    For the coach endpoint's door (app/mcp_mount.py), which needs the answer
+    before any route runs. It only looks: no last-used stamp and no audit
+    event, because the API calls the coach makes with the token do both.
+    """
+    with SessionLocal() as db:
+        row = db.execute(
+            select(ApiToken.expires_at, User.is_active)
+            .join(User, ApiToken.user_id == User.id)
+            .where(ApiToken.token_hash == hash_token(raw_token))
+        ).first()
+    if row is None or not row.is_active:
+        return False
+    return row.expires_at is None or row.expires_at >= datetime.now(timezone.utc)
+
+
 def get_current_admin(user: CurrentUser) -> User:
     if user.role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")

@@ -2,7 +2,7 @@ import { LockKey, WarningCircle } from '@phosphor-icons/react'
 import { LogoMark } from '../components/LogoMark'
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { ApiError, api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import type { LoginResponse, SetupStatus } from '../lib/types'
@@ -14,6 +14,11 @@ type Mode = 'checking' | 'login' | 'setup'
 export function Login() {
   const { user, login, adoptSession } = useAuth()
   const navigate = useNavigate()
+  // Set by RequireAuth when it sent someone here from a page that needs a
+  // session. Only ever a path on this site, so signing in cannot be turned
+  // into a way of sending someone elsewhere.
+  const from = (useLocation().state as { from?: unknown } | null)?.from
+  const target = typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') ? from : '/'
   const [mode, setMode] = useState<Mode>('checking')
   const [username, setUsername] = useState('')
   const [displayName, setDisplayName] = useState('')
@@ -39,7 +44,7 @@ export function Login() {
     }
   }, [])
 
-  if (user) return <Navigate to="/" replace />
+  if (user) return <Navigate to={target} replace />
 
   async function onSubmitLogin(e: FormEvent) {
     e.preventDefault()
@@ -51,7 +56,7 @@ export function Login() {
     setError(null)
     try {
       await login(username.trim(), password)
-      navigate('/', { replace: true })
+      navigate(target, { replace: true })
     } catch (err) {
       if (err instanceof ApiError && err.status === 429) {
         setError('Too many attempts — wait a minute and try again')
@@ -87,7 +92,7 @@ export function Login() {
         { auth: false },
       )
       adoptSession(res)
-      navigate('/', { replace: true })
+      navigate(target, { replace: true })
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         // Bootstrap (or another browser) beat us to it — fall back to sign-in.
