@@ -168,3 +168,62 @@
   font-size: 11.5px;
   color: var(--faint);
 }
+
+/* Approval page for an assistant connecting to the coach (OAuthConsent.tsx) */
+.consent-card {
+  width: 440px;
+}
+.consent-card .login-note strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.consent-list {
+  margin: 0 0 18px;
+  padding: 14px 16px 14px 32px;
+  border-radius: 13px;
+  background: var(--input-bg);
+  border: 1px solid var(--border-input);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-3);
+}
+.consent-list li + li {
+  margin-top: 8px;
+}
+.consent-warn {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--amber);
+}
+.consent-warn svg {
+  flex: none;
+  margin-top: 2px;
+}
+.consent-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 22px;
+}
+.consent-actions .login-submit {
+  margin-top: 0;
+  flex: 1.4;
+}
+.consent-cancel {
+  flex: 1;
+  text-align: center;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border-input);
+  color: var(--text-3);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.consent-cancel:disabled {
+  opacity: 0.6;
+}

@@ -3,7 +3,7 @@
 // athlete is already using and a freshly minted token. Keep in step with the
 // "Connect a client" section of the README, which is the long-form version.
 
-export type CoachClientId = 'claude-desktop' | 'claude-code' | 'cursor' | 'vscode' | 'other'
+export type CoachClientId = 'claude-desktop' | 'claude' | 'claude-code' | 'cursor' | 'vscode' | 'other'
 
 export interface CoachClient {
   id: CoachClientId
@@ -12,6 +12,7 @@ export interface CoachClient {
 
 export const COACH_CLIENTS: CoachClient[] = [
   { id: 'claude-desktop', label: 'Claude Desktop' },
+  { id: 'claude', label: 'Claude (web & phone)' },
   { id: 'claude-code', label: 'Claude Code' },
   { id: 'cursor', label: 'Cursor' },
   { id: 'vscode', label: 'VS Code' },
@@ -31,6 +32,14 @@ export interface CoachSetup {
   extension?: boolean
   // Something the client shows during setup that looks alarming and is not.
   note?: string
+  // The client signs in through the server (OAuth) and is given its token
+  // that way, so there is none to create or paste here.
+  signIn?: boolean
+}
+
+/** Clients that sign in for themselves need no token from the dashboard. */
+export function signsIn(client: CoachClientId): boolean {
+  return client === 'claude'
 }
 
 const SERVER_NAME = 'training'
@@ -71,6 +80,23 @@ export function buildCoachSetup(client: CoachClientId, url: string, token: strin
           'Claude Desktop warns that an extension can access your computer, and lists the developer as unknown. ' +
           'That is expected for an extension installed from a file. This one reads no files: it only passes ' +
           'messages between Claude Desktop and this server.',
+      }
+    case 'claude':
+      // claude.ai and the Claude phone apps connect from Anthropic's servers,
+      // not from the athlete's device, and cannot be given a header: they
+      // sign in. The same steps work in Claude Desktop's Connectors screen.
+      return {
+        steps: [
+          'In Claude, open Settings → Connectors and choose “Add custom connector”.',
+          'Paste the address below and add it.',
+          'Click Connect. Claude sends you to this server to sign in and approve, then back.',
+        ],
+        snippet: url,
+        snippetHasToken: false,
+        signIn: true,
+        note:
+          'Claude connects from Anthropic’s servers, so this works only when the address below can be reached ' +
+          'from the internet. For a server that is only on your home network or tailnet, use Claude Desktop instead.',
       }
     case 'claude-code':
       return {

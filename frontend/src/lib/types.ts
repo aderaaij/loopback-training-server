@@ -105,6 +105,8 @@ export interface MapConfig {
 
 export interface RuntimeConfig {
   map: MapConfig
+  /** The coach endpoint's public address, when the server was told it; else the dashboard's own origin is used. */
+  coachUrl: string | null
 }
 
 // ── workouts (snake_case) ──
@@ -553,4 +555,25 @@ export interface CalendarResponse {
   from: string
   to: string
   entries: CalendarEntry[]
+}
+
+// ── OAuth approval page (camelCase, like auth) ──
+
+/** A connection an assistant is waiting for the athlete to approve. */
+export interface OAuthConsentRequest {
+  id: string
+  /** What the app calls itself. Shown only when `recognised`. */
+  clientName: string | null
+  /** The host that publishes the app's identity, which it cannot make up. */
+  clientHost: string
+  recognised: boolean
+  /** Where the browser goes with the answer. */
+  redirectHost: string
+  /** The answer goes to a program on this computer, not to a website. */
+  loopback: boolean
+  expiresAt: string
+}
+
+export interface OAuthRedirect {
+  redirectTo: string
 }

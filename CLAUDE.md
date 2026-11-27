@@ -129,7 +129,7 @@ make migrate                     # Run Alembic migrations
 make create_migration m="desc"   # Create new migration
 ```
 
-The API runs on port **8001**. Auth is per-user: `POST /api/auth/login` mints opaque `tapi_` bearer tokens (argon2 passwords, SHA-256-hashed tokens); only `/api/health` and `/api/auth/login` are unauthenticated.
+The API runs on port **8001**. Auth is per-user: `POST /api/auth/login` mints opaque `tapi_` bearer tokens (argon2 passwords, SHA-256-hashed tokens); only `/api/health`, `/api/auth/login` and the OAuth endpoints an assistant calls before it has a token (`/.well-known/oauth-*`, `/oauth/authorize`, `/oauth/token`; see "Signing in from an assistant") are unauthenticated.
 
 **Demo stack:** `docker compose -f docker-compose.demo.yml up -d && python3 scripts/seed_demo.py` boots a fully isolated demo instance on **:8011** (own compose project `training-api-demo`, own volume, hardcoded throwaway creds: `admin`/`demo-admin`, athlete `sofia`/`sofia-demo`) and seeds ~16 weeks of synthetic training through the public API (stdlib-only seeder, deterministic per `--seed`, anchored to today). The README screenshots are captures of exactly this seed. Reset: `docker compose -f docker-compose.demo.yml down -v`. The seeder creates the run plan *last* on purpose — plan-note context resolves to the most recently created active plan. `--skip-workouts` seeds everything except workout rows (queue completions and all other state stay) — for the combined simulator demo where the iOS app's DEBUG HealthKit seeder (`DebugWorkoutSeeder.swift` in the app repo) uploads the same story and workout ids match end-to-end; this script is the canonical spec for that seeder.
 
@@ -259,8 +259,9 @@ Models live in `backend/app/models/`. Key tables:
 - **`/.well-known/*` is a JSON 404, not the dashboard** (unless a real file exists in the
   build). The same catch-all used to answer it with `index.html` and a 200, which an MCP
   client looking for OAuth metadata after the 401 from `/mcp` reads as a broken metadata
-  document instead of "no OAuth here" (`backend/tests/test_spa_fallback.py`). When OAuth
-  is added, its discovery routes have to be registered ahead of the catch-all.
+  document instead of "no OAuth here" (`backend/tests/test_spa_fallback.py`). The OAuth
+  discovery documents are routes of their own (`routes/oauth.py`), included in `main.py`
+  ahead of the catch-all for that reason; `openid-configuration` stays a 404.
 - Not built yet: `DELETE /api/me/data/{domain}` (per-domain deletion at the moment
   consent is withdrawn — the app currently promises only that syncing stops).
 
@@ -298,9 +299,12 @@ The MCP server (`mcp/`) exposes training data to Claude via FastMCP. It talks to
   - **Still HTTP, still the caller's token**: embedded, the MCP calls the API over loopback
     (`TRAINING_API_URL` default `http://localhost:8001`) rather than touching the DB, so
     auth, user scoping and the `X-Consent-Scope` filtering are one code path either way.
-  - The door checks only that a bearer token is *present* (401 otherwise); the API verifies
-    it on every call. A bogus token can therefore open a session and list tool schemas
-    (the consent lookup fails open to "advertise all"), but every data call fails.
+  - **The door checks the token itself** (`token_is_live` in `app/auth.py`, 401 otherwise),
+    although the API verifies it again on every call. Until OAuth it only checked that one
+    was sent, so a bogus token opened a session and listed tool schemas. That had to go: an
+    assistant that signed in only learns it must sign in again from a 401 at `/mcp`, and
+    the endpoint is now meant to be reachable by strangers. The check only reads; the
+    last-used stamp and the `token_rejected` event still come from the API calls.
 - **Claude Desktop extension (`.mcpb`), since 0.1.29.** Claude Desktop cannot
   send a bearer token to a remote server, and its connector dialog calls from Anthropic's
   servers, which cannot reach a tailnet. `GET /api/coach/claude-desktop.mcpb`
@@ -333,10 +337,9 @@ The MCP server (`mcp/`) exposes training data to Claude via FastMCP. It talks to
     answers it anyway (checked against fastmcp 3.1.1).
   - **A 202 for a notification is labelled `application/json` and has an empty body**, which
     must not reach the JSON parser.
-  - A wrong token still opens a session (the door only checks that one is present, see
-    above); the athlete finds out from the first tool call, whose error the coach can read
-    out. An unreachable server fails `initialize`, and the reason goes to the extension's
-    log.
+  - A wrong token fails `initialize` with a 401 (the door checks it, see above), which the
+    relay reports as "The Loopback server refused the token". An unreachable server fails
+    `initialize` too, and either reason goes to the extension's log.
   - Tests: `backend/tests/desktop_extension/relay.test.js` (Node's own runner, a stand-in
     HTTP server, its own CI job) and `backend/tests/test_coach_extension.py` (what goes in
     the zip). The manifest is `manifest_version` 0.3 and validates against the published
@@ -370,6 +373,71 @@ The MCP server (`mcp/`) exposes training data to Claude via FastMCP. It talks to
     address. Not done; the Connect dialog and the README say what to expect instead.
   - To see what Claude Desktop did: `~/Library/Logs/Claude/mcp-server-Loopback Coach.log`
     and `main.log` on macOS, next to whether a `POST /mcp` reached the server at all.
+- **Signing in from an assistant (OAuth; unreleased after 0.1.29).** claude.ai, the Claude
+  phone apps and Claude Desktop's connector dialog cannot be given a header, so `/mcp` also
+  accepts an assistant that signs in: paste the address, approve in the dashboard. The flow
+  and the reasoning are in the docstring of `backend/app/oauth.py`; routes in
+  `routes/oauth.py`, the approval page in `frontend/src/screens/OAuthConsent.tsx`, one table
+  (`oauth_authorizations`, a row per sign-in run, deleted when its code is used). Things
+  worth not re-deriving:
+  - **The token it ends in is an ordinary `api_tokens` row** named `Coach · <client>`,
+    listed and revoked under Settings like any other. No expiry and no refresh tokens, on
+    purpose: that is what every other coach token is, and a refresh that fails disconnects
+    the coach for a reason the athlete cannot see. It also means such a token can call the
+    whole REST API, not just `/mcp`, exactly as a pasted one can; a `coach` scope on tokens
+    would be the way to narrow that and does not exist.
+  - **The request handling is the MCP SDK's** (`AuthorizationHandler`, `TokenHandler` from
+    `mcp.server.auth`, pinned with fastmcp in `backend/pyproject.toml`): parameter
+    validation, the redirect comparison and the PKCE check are theirs. `CoachOAuthProvider`
+    supplies storage and decisions. Not FastMCP's `auth=`: the MCP app is dispatched under
+    `/mcp`, and the discovery documents have to sit at the root of the site.
+  - **Clients identify themselves with a metadata document** (the client id is the https
+    address of a JSON file, "CIMD"), fetched with FastMCP's `CIMDFetcher`, which refuses
+    anything but public https and pins the resolved address. There is no registration
+    endpoint and no table of clients. Claude picks this over registering only when the
+    server metadata carries both `client_id_metadata_document_supported: true` and `none`
+    in `token_endpoint_auth_methods_supported`. A client that expects to register itself
+    is not supported.
+  - ⚠️ **A redirect address being on the client's own list is not enough.** FastMCP's
+    document model and its own redirect check both accept `javascript://host/%0Aalert(1)`,
+    and the approval page sends the browser to that address on Allow *and* on Cancel, which
+    would run the client's script in the dashboard with the athlete's token in reach.
+    `redirect_allowed` allows https, or http to this computer (any port, RFC 8252, which is
+    what Claude Code uses), and the page checks again before navigating. So an app that
+    wants its code on a scheme of its own (`cursor://`) cannot sign in.
+  - **The approval page can live at another address than everything the assistant calls**
+    (`OAUTH_AUTHORIZATION_ORIGIN`), because only the athlete's browser loads it. That lets a
+    server publish `/mcp`, `/oauth/token` and the two discovery documents while the
+    dashboard, and every page that takes a password, stays private. `/oauth/authorize`
+    redirects to the approval page with a relative address so the browser stays on
+    whichever address it came in on.
+  - **The server describes itself by the address the request arrived at** (`public_origin`:
+    `X-Forwarded-Proto`, `X-Forwarded-Host`, `Host`), read without asking whether the peer
+    may set them. In Docker the peer is the bridge gateway, never loopback, so uvicorn's
+    own proxy handling trusts nothing and would say `http`. A caller who lies gets
+    documents describing the wrong server and nobody else does (they are `no-store`);
+    nothing is decided on that address. `PUBLIC_URL` overrides it.
+  - **Checked against claude.ai on 2026-11-27**, with a build of this branch behind
+    Tailscale Funnel (443) and tailnet-only Serve (8443, the approval page). What Claude
+    does: it follows the `resource_metadata` address in the 401, sends no `scope`, sends
+    `resource=<the address as entered>` to both endpoints, and after connecting first
+    POSTs a `server/discover` (protocol `2026-07-28`) that this server answers with its
+    usual HTTP 400 for a request without a session; Claude then falls back to `initialize`.
+    All its server-side calls came from `160.79.104.0/21`, a different address each time.
+    Claude only connects to port 443 (its help pages say so), and a login page on a host
+    with no public DNS record at all is the one arrangement not tried.
+  - **Publishing only the coach works with Tailscale's per-path forwarding** (tried
+    2026-11-27 on the same build: `tailscale funnel --https=443 --set-path /mcp …/mcp`, and
+    the same for `/oauth/token` and the two `/.well-known/oauth-*` documents, with the
+    dashboard on tailnet-only Serve). Tailscale answers every other path itself with a 404,
+    and `..`, `%2e%2e` and `//` do not get out of a forwarded path. A forwarded path is a
+    prefix though, so `/mcp/anything` reaches the app: the catch-all in `main.py` answers
+    those with a 404 (`_NOT_DASHBOARD`) instead of the dashboard's HTML. Not packaged as a
+    compose add-on yet.
+  - The dashboard pages are sent with `X-Frame-Options: DENY` since this: a site that could
+    frame the approval page could dress up its Allow button.
+  - `fastapi run` wraps long access-log lines, so a `grep` for `/oauth/authorize` in the
+    container log finds nothing although the request is there.
 - Standalone mode remains (`cd mcp && uv run start`): stdio by default, `MCP_TRANSPORT=http`
   for its own port (8590). Env: `mcp/config/.env` (`TRAINING_API_URL`, `TRAINING_API_KEY`).
 - **Coaching playbook:** `get_coaching_playbook(goal?, experience?)` serves the running-coach

@@ -6,9 +6,9 @@ import { ConfirmDialog, ErrorNote, Loading, Modal, SectionLabel } from '../compo
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { clientLabel, fmtDayYear, relTime } from '../lib/format'
-import { COACH_CLIENTS, buildCoachSetup, coachUrl } from '../lib/coachSetup'
+import { COACH_CLIENTS, buildCoachSetup, coachUrl, signsIn } from '../lib/coachSetup'
 import type { CoachClientId } from '../lib/coachSetup'
-import { useChangePassword, useLiveness, useMe, useMintToken, useRevokeToken } from '../lib/queries'
+import { useChangePassword, useLiveness, useMe, useMintToken, useRevokeToken, useRuntimeConfig } from '../lib/queries'
 import type { ApiTokenInfo } from '../lib/types'
 import { UNITS, type Units, setUnits, useUnits } from '../lib/units'
 import { WEEK_STARTS, type WeekStart, setWeekStart, useWeekStart } from '../lib/weekStart'
@@ -341,9 +341,15 @@ function ConnectCoachModal({ onClose }: { onClose: () => void }) {
   const mint = useMintToken()
   const [client, setClient] = useState<CoachClientId>('claude-desktop')
   const clientName = COACH_CLIENTS.find((c) => c.id === client)?.label ?? ''
-  const url = coachUrl(window.location.origin)
+  const config = useRuntimeConfig()
+  const ownUrl = coachUrl(window.location.origin)
   const token = mint.data?.token
-  const setup = token ? buildCoachSetup(client, url, token) : null
+  // An assistant that signs in for itself gets its token from the server, so
+  // its setup is shown at once. It runs elsewhere, which is why it is given
+  // the server's public address when that is not the one this page is on.
+  const signIn = signsIn(client)
+  const url = signIn ? (config.data?.coachUrl ?? ownUrl) : ownUrl
+  const setup = signIn ? buildCoachSetup(client, url, '') : token ? buildCoachSetup(client, url, token) : null
   const locked = token != null || mint.isPending
 
   return (
@@ -374,7 +380,7 @@ function ConnectCoachModal({ onClose }: { onClose: () => void }) {
         ))}
       </div>
 
-      {setup && token ? (
+      {setup ? (
         <>
           <ol className="connect-steps">
             {setup.steps.map((step) => (
@@ -383,7 +389,7 @@ function ConnectCoachModal({ onClose }: { onClose: () => void }) {
           </ol>
           {setup.note && <p className="connect-note">{setup.note}</p>}
           {setup.snippet != null && <div className="cli-box connect-snippet">{setup.snippet}</div>}
-          {!setup.snippetHasToken && (
+          {!setup.snippetHasToken && token && (
             <div
               className="cli-box connect-snippet"
               style={{ marginTop: setup.snippet != null ? 10 : 0, wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}
@@ -391,18 +397,29 @@ function ConnectCoachModal({ onClose }: { onClose: () => void }) {
               {token}
             </div>
           )}
-          <p className="connect-warn">
-            {setup.snippetHasToken ? 'This contains your token. ' : 'This is your token. '}
-            It is shown <strong style={{ color: 'var(--amber)' }}>only this once</strong>; revoke it under Devices &amp;
-            tokens if it leaks. To set up another app, close this and connect again: each app gets its own token.
-          </p>
+          {token ? (
+            <p className="connect-warn">
+              {setup.snippetHasToken ? 'This contains your token. ' : 'This is your token. '}
+              It is shown <strong style={{ color: 'var(--amber)' }}>only this once</strong>; revoke it under Devices &amp;
+              tokens if it leaks. To set up another app, close this and connect again: each app gets its own token.
+            </p>
+          ) : (
+            <p className="connect-note" style={{ marginTop: 12 }}>
+              Nothing to copy but the address: once you approve, the connection appears under Devices &amp; tokens,
+              where you can remove it.
+            </p>
+          )}
           <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
             <button className="btn-ghost" style={{ flex: 1 }} onClick={onClose}>
               Done
             </button>
-            {!setup.snippetHasToken && <CopyButton key={`${client}-token`} text={token} label="Copy token" />}
+            {!setup.snippetHasToken && token && <CopyButton key={`${client}-token`} text={token} label="Copy token" />}
             {setup.snippet != null && (
-              <CopyButton key={client} text={setup.snippet} label={setup.snippetHasToken ? 'Copy' : 'Copy config'} />
+              <CopyButton
+                key={client}
+                text={setup.snippet}
+                label={setup.signIn ? 'Copy address' : setup.snippetHasToken ? 'Copy' : 'Copy config'}
+              />
             )}
             {setup.extension && <DownloadExtensionButton />}
           </div>

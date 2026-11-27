@@ -50,5 +50,14 @@ def test_endpoint_serves_the_settings(client_a):
     app.dependency_overrides[get_settings] = lambda: _settings(carto_api_key="k")
     body = client_a.get(URL).json()
     assert body["map"]["tileUrl"].endswith("?key=k")
-    assert set(body) == {"map"}
+    assert set(body) == {"map", "coachUrl"}
     assert set(body["map"]) == {"tileUrl", "attribution", "subdomains"}
+
+
+# The dashboard shows an assistant the address it was itself opened at, unless
+# the server was told its public one: an assistant in the cloud needs that one.
+def test_coach_address_is_only_given_when_the_server_was_told_it(client_a):
+    app.dependency_overrides[get_settings] = lambda: _settings()
+    assert client_a.get(URL).json()["coachUrl"] is None
+    app.dependency_overrides[get_settings] = lambda: _settings(public_url="https://coach.example/")
+    assert client_a.get(URL).json()["coachUrl"] == "https://coach.example/mcp"

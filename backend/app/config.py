@@ -45,6 +45,29 @@ class Settings(BaseSettings):
     bootstrap_admin_username: str = "admin"
     bootstrap_admin_password: str | None = None
 
+    # OAuth for the coach endpoint (app/oauth.py). Both are optional: with
+    # neither set the server describes itself by the address each request
+    # arrived at, which is right behind Tailscale Serve and Caddy.
+    #   PUBLIC_URL — the server's address as clients see it, for a proxy that
+    #     does not pass the original Host on.
+    #   OAUTH_AUTHORIZATION_ORIGIN — where the approval page lives, when that is
+    #     not the address the assistant connects to: a server whose coach
+    #     endpoint is public while the dashboard, and so the page that takes a
+    #     password, stays on a private network.
+    public_url: str | None = None
+    oauth_authorization_origin: str | None = None
+
+    @field_validator("public_url", "oauth_authorization_origin")
+    @classmethod
+    def _check_origin(cls, v: str | None) -> str | None:
+        if v is None or not v.strip():
+            return None
+        v = v.strip().rstrip("/")
+        scheme, sep, rest = v.partition("://")
+        if scheme not in ("http", "https") or not sep or not rest or "/" in rest or "?" in rest or "#" in rest:
+            raise ValueError("must be an origin such as https://loopback.example.com, with no path")
+        return v
+
     # Route-map tiles, served to the SPA at runtime (GET /api/config) so the
     # published image needs no rebuild to change them. Precedence:
     #   1. MAP_TILE_URL — a full Leaflet URL template ({s} {z} {x} {y} {r} and a

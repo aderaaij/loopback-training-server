@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { Layout } from './components/Layout'
 import { PageHeaderProvider } from './components/PageHeader'
@@ -7,6 +7,7 @@ import { Calendar } from './screens/Calendar'
 import { Health } from './screens/Health'
 import { Login } from './screens/Login'
 import { Notes } from './screens/Notes'
+import { OAuthConsent } from './screens/OAuthConsent'
 import { Overview } from './screens/Overview'
 import { PlanDetail } from './screens/PlanDetail'
 import { Plans } from './screens/Plans'
@@ -19,7 +20,11 @@ import { Workouts } from './screens/Workouts'
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user } = useAuth()
-  if (!user) return <Navigate to="/login" replace />
+  const location = useLocation()
+  // Where they were headed goes along, so signing in lands them there. It
+  // matters for the page an assistant sends them to (/oauth/consent), whose
+  // address carries the request they came to answer.
+  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />
   return children
 }
 
@@ -37,6 +42,14 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route
+              path="/oauth/consent"
+              element={
+                <RequireAuth>
+                  <OAuthConsent />
+                </RequireAuth>
+              }
+            />
             <Route
               element={
                 <RequireAuth>

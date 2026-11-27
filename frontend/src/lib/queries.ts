@@ -14,6 +14,8 @@ import type {
   MintedToken,
   NutritionDay,
   NutritionSummary,
+  OAuthConsentRequest,
+  OAuthRedirect,
   Plan,
   PlanCompleteResponse,
   PlanNote,
@@ -59,6 +61,32 @@ export function useMintToken() {
   return useMutation({
     mutationFn: (body: { name: string; expiresAt?: string }) => api.post<MintedToken>('/api/auth/tokens', body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
+  })
+}
+
+// ── OAuth approval page ──
+
+// The id comes straight from the page's address, which whoever sent the link
+// wrote. Encoded, so it stays one path segment and cannot aim these calls at
+// some other endpoint.
+const oauthRequestPath = (id: string | null) => `/api/oauth/requests/${encodeURIComponent(id ?? '')}`
+
+export function useOAuthRequest(id: string | null) {
+  return useQuery({
+    queryKey: ['oauth-request', id],
+    queryFn: () => api.get<OAuthConsentRequest>(oauthRequestPath(id)),
+    enabled: id != null,
+    // A request is answered once and then gone; asking again only turns the
+    // page into an error while the browser is on its way out.
+    retry: false,
+    refetchOnWindowFocus: false,
+    staleTime: Infinity,
+  })
+}
+
+export function useAnswerOAuthRequest(id: string | null) {
+  return useMutation({
+    mutationFn: (decision: 'approve' | 'deny') => api.post<OAuthRedirect>(`${oauthRequestPath(id)}/${decision}`),
   })
 }
 

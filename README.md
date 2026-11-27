@@ -182,6 +182,8 @@ Everything is configured through environment variables in the root `.env` (read 
 | `POSTGRES_PASSWORD` / `POSTGRES_USER` / `POSTGRES_DB` | `training-api` | Database credentials (not published outside the compose network; also fed to the app as `DATABASE_URL`) |
 | `API_PORT` | `8001` | Host port for the API + dashboard |
 | `MCP_ENABLED` | `true` | Serve the coach MCP at `/mcp` on the same port (see [MCP Server](#mcp-server)). `false` removes the endpoint |
+| `PUBLIC_URL` | *(unset)* | The server's address as an assistant reaches it, e.g. `https://loopback.example.com`. Only needed behind a proxy that does not pass the original `Host` header on: the server otherwise reads its address from each request (see [Signing in from an assistant](#signing-in-from-an-assistant)) |
+| `OAUTH_AUTHORIZATION_ORIGIN` | *(unset)* | Where the page that asks you to sign in and approve an assistant lives, when that is not the address the assistant connects to: a coach endpoint that is public next to a dashboard that is not |
 | `FORWARDED_ALLOW_IPS` | *(unset)* | Behind a reverse proxy: the address(es) or CIDR the proxy connects from, whose `X-Forwarded-For` the server trusts for the client address (login rate limit, audit trail). Unset, only loopback is trusted and every proxied client looks like the proxy. `deploy/https/caddy.yml` sets this for you. Never use `*` while port 8001 is reachable by anything but the proxy |
 | `DOMAIN` | *(unset)* | Hostname for built-in HTTPS, used with `deploy/https/caddy.yml` (see [Exposing the server](#exposing-the-server)) |
 | `BACKUP_HOST_DIR` | `./backups` | Host directory the server writes its `pg_dump` backups to (and reports freshness from) |
@@ -214,7 +216,7 @@ npm run build      # production build (also run inside the Docker build)
 
 ## API
 
-All endpoints except `/api/health` and `/api/auth/login` require a `Bearer` token in the `Authorization` header. Tokens are issued per device by `POST /api/auth/login` (username + password, rate-limited 5/min/IP); `/api/admin/*` additionally requires the `admin` role.
+All `/api` endpoints except `/api/health` and `/api/auth/login` require a `Bearer` token in the `Authorization` header. Tokens are issued per device by `POST /api/auth/login` (username + password, rate-limited 5/min/IP); `/api/admin/*` additionally requires the `admin` role.
 
 > **Wire casing:** JSON casing varies by resource — auth, admin, feedback, and calendar are camelCase; workouts, queue, plans, and health metrics are snake_case.
 
@@ -230,6 +232,18 @@ All endpoints except `/api/health` and `/api/auth/login` require a `Bearer` toke
 | `POST` | `/api/auth/tokens` | Mint a named token (shown once; optional `expiresAt`) |
 | `DELETE` | `/api/auth/tokens/{id}` | Revoke one of your own tokens |
 | `GET` | `/api/coach/claude-desktop.mcpb` | The Claude Desktop extension for the coach, as a file (optional `serverUrl` fills in the server address; never contains a token) |
+
+Signing in from an assistant (OAuth 2.1 with PKCE; see [MCP Server](#signing-in-from-an-assistant)). The first four take no token; the last three are the dashboard's approval page acting as the signed-in athlete.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/.well-known/oauth-protected-resource` | Which server issues tokens for `/mcp` (also at `…/oauth-protected-resource/mcp`) |
+| `GET` | `/.well-known/oauth-authorization-server` | Where to send the athlete and where to trade the code |
+| `GET` | `/oauth/authorize` | Checks an assistant's request and passes the browser on to the approval page |
+| `POST` | `/oauth/token` | Trades the one-time code for a token (an ordinary API token; no refresh tokens) |
+| `GET` | `/api/oauth/requests/{id}` | The request waiting for an answer (404 once answered or after 10 minutes) |
+| `POST` | `/api/oauth/requests/{id}/approve` | Approve as yourself; returns where to send the browser (403 for an admin account) |
+| `POST` | `/api/oauth/requests/{id}/deny` | Decline; returns where to send the browser |
 
 ### Admin
 
@@ -357,11 +371,11 @@ The server ships with an [MCP](https://modelcontextprotocol.io) endpoint that ex
 http://<machine-name>:8001/mcp
 ```
 
-Each person authenticates with their **own** token in an `Authorization: Bearer` header (mint one in the dashboard: **Settings → New token**), so the data is scoped to their account — this is the "point your own Claude (or any LLM) at it" path. A request without a bearer token gets a 401. Set `MCP_ENABLED=false` in `.env` to serve no coach endpoint at all.
+Each person connects as **themselves**, so the data is scoped to their account — this is the "point your own Claude (or any LLM) at it" path. There are two ways to do that. An assistant that can be given a header sends the person's own token as `Authorization: Bearer` (mint one in the dashboard: **Settings → New token**). An assistant that cannot, such as claude.ai, [signs in](#signing-in-from-an-assistant): you approve it in the dashboard and it is given a token of its own. A request without a valid token gets a 401. Set `MCP_ENABLED=false` in `.env` to serve no coach endpoint at all.
 
 ### Connect a client
 
-The quickest way: in the dashboard, **Settings → AI coach → Connect** creates a token and shows the setup for your client: an extension to install for Claude Desktop, and for the others a snippet with the server address and token already filled in. The snippets below are the same thing by hand; substitute your server's address and your token.
+The quickest way: in the dashboard, **Settings → AI coach → Connect** shows the setup for your client: an extension to install for Claude Desktop, the address to paste for Claude on the web and phone, and for the others a snippet with the server address and a new token already filled in. The sections below are the same thing by hand; substitute your server's address and your token.
 
 **Claude Code**
 
@@ -384,7 +398,7 @@ Claude Desktop cannot send a bearer token to a remote server by itself, so Loopb
    Claude Desktop warns that an extension can access your computer, and lists the developer as unknown. That is expected: it shows both for an extension that is installed from a file and is not signed. This one reads no files. It only passes messages between Claude Desktop and your server, and its two small scripts are readable in [`backend/app/desktop_extension/server`](backend/app/desktop_extension/server).
 4. Ask in a new chat: *"What did I run this week?"*
 
-Do not use **Settings → Connectors → Add custom connector** instead: that flow connects from Anthropic's servers and expects OAuth, so it does not work with this server (see [Reachability](#reachability)).
+**Settings → Connectors → Add custom connector** in Claude Desktop is a different route: it connects from Anthropic's servers, not from your computer, so it only works for a server that can be reached from the internet (see [Signing in from an assistant](#signing-in-from-an-assistant)). For a server on your home network or tailnet, the extension is the way.
 
 The extension is one small script that passes messages between Claude Desktop and `/mcp` on your server, run by the Node.js that Claude Desktop ships. If the server restarts while Claude Desktop is open (an upgrade, a reboot), the extension reconnects by itself. The download is the same for everyone on the server: it holds the address but never a token, so it is safe to pass on to someone else in the household, who then pastes their own.
 
@@ -445,6 +459,26 @@ Why the config looks like this: the token goes in `env` and is referenced as `${
 
 </details>
 
+<a id="signing-in-from-an-assistant"></a>**Claude on the web and phone** (signing in)
+
+claude.ai and the Claude phone apps cannot be given a token. They sign in instead: you paste the server's address, approve the connection in the Loopback dashboard, and Claude is handed a token of its own.
+
+1. In Claude, open **Settings → Connectors** and choose **Add custom connector**.
+2. Paste your server's address followed by `/mcp` (the dashboard shows it under **Settings → AI coach → Connect → Claude (web & phone)**) and add it.
+3. Click **Connect**. Your browser opens the Loopback dashboard, which asks you to sign in if you are not, and then whether to let Claude act as your coach. Choose **Allow**.
+4. Ask in a new chat: *"What did I run this week?"* A connector added on the web is there in the phone app too.
+
+The connection then shows up as **Coach · Claude** under **Settings → Devices & tokens**, where **Revoke** disconnects it. Claude never sees your password.
+
+What this needs:
+
+- **A server Claude can reach.** Claude connects from Anthropic's servers, so the address has to work from the internet, over HTTPS, on the standard port (443). The [built-in HTTPS](#built-in-https-a-server-with-a-public-ip-and-a-domain) setup gives you that. A server that is only on your home network or tailnet cannot be connected this way; use Claude Desktop with the extension for that one.
+- **Nothing to configure.** The server tells Claude where to sign in, and reads its own address from the request Claude makes, which is right behind Tailscale and Caddy. Behind a proxy that replaces the `Host` header, set `PUBLIC_URL` (see [Configuration](#configuration)).
+
+Only the coach has to be public for this, not the dashboard. Everything Anthropic's servers call is `/mcp`, `/oauth/token` and two documents under `/.well-known/`. The pages you sign in and approve on are opened by your own browser only, so they can stay on a private address: set `OAUTH_AUTHORIZATION_ORIGIN` to the address you open the dashboard at, and publish only those paths. No page that takes a password is then on the internet.
+
+Other assistants that sign in the same way work too, as long as they identify themselves with a published client document (the newer of the two ways an MCP client can introduce itself; Claude and Claude Code do). An assistant Loopback does not know is shown by its web address on the approval page, with a warning. Assistants that expect to register themselves with the server first are not supported yet.
+
 **Cursor** (`~/.cursor/mcp.json`)
 
 ```json
@@ -486,13 +520,11 @@ header (Cline, the OpenAI Agents SDK's `MCPServerStreamableHttp`, LangChain's
 behind the client is your choice. Sanity-check a new setup with
 `npx @modelcontextprotocol/inspector`.
 
-<a id="reachability"></a>**Reachability:** clients that run on your own machine (the four above) reach the
-server directly, at the same address as the dashboard. Cloud-hosted connectors — claude.ai's web
-connectors, OpenAI's *hosted* MCP tool — call from the provider's servers
-instead, so they need a publicly reachable URL ([Tailscale
-Funnel](https://tailscale.com/kb/1223/funnel) or a reverse proxy), and
-claude.ai's connector flow additionally expects OAuth, which this bearer-token
-setup doesn't advertise.
+<a id="reachability"></a>**Reachability:** clients that run on your own machine (Claude Desktop with the
+extension, Claude Code, Cursor, VS Code) reach the server directly, at the same
+address as the dashboard. Cloud-hosted connectors — claude.ai's connectors,
+OpenAI's *hosted* MCP tool — call from the provider's servers instead, so they
+need an address that works from the internet, over HTTPS on port 443.
 
 ### Running the MCP on its own
 

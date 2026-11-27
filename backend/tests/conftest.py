@@ -72,6 +72,11 @@ def wire(engine, session_factory, monkeypatch):
     # Same reason for the token_rejected throttle: one shared client IP would
     # let an unknown-token event in one test suppress them in every later one.
     auth_module._reject_event_last.clear()
+    # The addresses the server gives out for itself follow these two settings.
+    # An install that sets them (and the suite runs inside such containers)
+    # must not change what the tests see.
+    monkeypatch.setattr(get_settings(), "public_url", None)
+    monkeypatch.setattr(get_settings(), "oauth_authorization_origin", None)
 
     with engine.begin() as c:
         for table in reversed(Base.metadata.sorted_tables):
