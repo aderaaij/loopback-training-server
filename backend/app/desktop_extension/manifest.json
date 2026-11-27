@@ -1,0 +1,55 @@
+{
+  "manifest_version": "0.3",
+  "name": "loopback-coach",
+  "display_name": "Loopback Coach",
+  "version": "0.0.0",
+  "description": "Lets Claude read your Loopback training data and plan with you as your running coach.",
+  "long_description": "Connects Claude Desktop to your own Loopback server. Claude can then look at your runs, health trends and training plans, build or adjust a plan with you, and send workouts to your Apple Watch.\n\nThe extension passes messages between Claude and the server address you enter, using your token, and talks to nothing else. Create the token in the Loopback dashboard under Settings → AI coach → Connect.",
+  "author": {
+    "name": "Loopback",
+    "url": "https://loopback.ardenlab.dev/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aderaaij/loopback-training-server.git"
+  },
+  "homepage": "https://loopback.ardenlab.dev/",
+  "documentation": "https://github.com/aderaaij/loopback-training-server#mcp-server",
+  "support": "https://github.com/aderaaij/loopback-training-server/issues",
+  "license": "MIT",
+  "keywords": ["running", "training", "coach", "health"],
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.js"],
+      "env": {
+        "LOOPBACK_SERVER_URL": "${user_config.server_url}",
+        "LOOPBACK_TOKEN": "${user_config.token}"
+      }
+    }
+  },
+  "tools_generated": true,
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  },
+  "user_config": {
+    "server_url": {
+      "type": "string",
+      "title": "Server address",
+      "description": "The address you open the Loopback dashboard at, for example https://loopback.example.com or http://my-server:8001.",
+      "required": true
+    },
+    "token": {
+      "type": "string",
+      "title": "Token",
+      "description": "Shown once in the Loopback dashboard under Settings → AI coach → Connect. Each app gets its own token.",
+      "sensitive": true,
+      "required": true
+    }
+  }
+}

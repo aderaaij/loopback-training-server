@@ -51,6 +51,20 @@ jobs:
       - run: uv sync --locked --no-install-project --extra test --python 3.13
       - run: .venv/bin/python -m pytest -q
 
+  desktop-extension:
+    # The relay inside the Claude Desktop extension
+    # (backend/app/desktop_extension): one script without dependencies, run
+    # against a stand-in HTTP server with Node's own test runner. Nothing to
+    # install. What the server puts in the bundle is covered by the backend
+    # suite (tests/test_coach_extension.py).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test backend/tests/desktop_extension/relay.test.js
+
   frontend:
     runs-on: ubuntu-latest
     defaults:

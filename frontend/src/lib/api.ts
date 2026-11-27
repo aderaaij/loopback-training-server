@@ -67,9 +67,9 @@ function buildUrl(path: string, query?: Query): string {
 async function request<T>(
   method: string,
   path: string,
-  opts: { query?: Query; body?: unknown; auth?: boolean } = {},
+  opts: { query?: Query; body?: unknown; auth?: boolean; blob?: boolean } = {},
 ): Promise<T> {
-  const { query, body, auth = true } = opts
+  const { query, body, auth = true, blob = false } = opts
   const headers: Record<string, string> = {}
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   if (auth) {
@@ -106,11 +106,14 @@ async function request<T>(
   }
 
   if (res.status === 204) return undefined as T
+  if (blob) return (await res.blob()) as T
   return (await res.json()) as T
 }
 
 export const api = {
   get: <T>(path: string, query?: Query) => request<T>('GET', path, { query }),
+  /** A file behind the bearer token, which a plain link could not send. */
+  blob: (path: string, query?: Query) => request<Blob>('GET', path, { query, blob: true }),
   post: <T>(path: string, body?: unknown, opts?: { auth?: boolean }) =>
     request<T>('POST', path, { body, auth: opts?.auth }),
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, { body }),

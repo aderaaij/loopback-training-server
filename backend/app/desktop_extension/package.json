@@ -1,0 +1,6 @@
+{
+  "name": "loopback-coach",
+  "private": true,
+  "type": "commonjs",
+  "main": "server/index.js"
+}

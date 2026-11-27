@@ -177,6 +177,13 @@
   color: var(--muted);
   margin: 10px 0 0;
 }
+/* Sits under the steps, whose own bottom margin it closes up a little. */
+.connect-note {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  margin: -4px 0 14px;
+}
 
 .cli-box {
   margin-top: 14px;
