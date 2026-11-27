@@ -35,7 +35,15 @@ export interface ApiTokenInfo {
   /** Last client User-Agent seen on this token (e.g. "Loopback-iOS/1.0"). */
   lastUserAgent: string | null
   expiresAt: string | null
+  /**
+   * 'coach' is a token for an AI assistant: the server lets it do what the
+   * coach's tools do and nothing else. 'full' is the athlete (this dashboard,
+   * the phone, a script of their own).
+   */
+  scope: TokenScope
 }
+
+export type TokenScope = 'full' | 'coach'
 
 export interface MeResponse {
   user: AuthUser

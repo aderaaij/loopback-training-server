@@ -25,6 +25,7 @@ import type {
   QueueItem,
   SystemStatus,
   TimedSample,
+  TokenScope,
   WorkoutContext,
   WorkoutListItem,
   WorkoutRead,
@@ -59,7 +60,8 @@ export function useChangePassword() {
 export function useMintToken() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { name: string; expiresAt?: string }) => api.post<MintedToken>('/api/auth/tokens', body),
+    mutationFn: (body: { name: string; expiresAt?: string; scope?: TokenScope }) =>
+      api.post<MintedToken>('/api/auth/tokens', body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
   })
 }

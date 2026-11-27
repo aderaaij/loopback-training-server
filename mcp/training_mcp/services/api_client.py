@@ -48,7 +48,16 @@ def _feedback_settles(entry: dict, scheduled: date) -> bool:
 
 
 class TrainingClient:
-    """Client for interacting with Training REST API."""
+    """Client for interacting with Training REST API.
+
+    An assistant's token is a coach token, which the API accepts only for the
+    requests made here: each method and path below is listed in
+    `COACH_ROUTES` (backend/app/token_scope.py). A call to a new endpoint
+    needs a line there, or it answers 403 for everyone who signed in;
+    backend/tests/test_token_scope.py compares the two by reading this file,
+    so write each call with the method and the path as literals, the way the
+    ones below are.
+    """
 
     def __init__(self) -> None:
         self.base_url = settings.training_api_url.rstrip("/")

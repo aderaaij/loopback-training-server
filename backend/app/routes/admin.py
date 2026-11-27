@@ -69,6 +69,7 @@ class AdminTokenOut(_CamelModel):
     last_used_at: datetime | None
     last_user_agent: str | None
     expires_at: datetime | None
+    scope: str
 
 
 class AuthEventOut(_CamelModel):

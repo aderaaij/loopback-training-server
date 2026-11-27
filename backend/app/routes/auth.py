@@ -6,7 +6,7 @@ while `me` and token revocation enforce auth via the CurrentUser parameter.
 
 import uuid
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
@@ -22,6 +22,7 @@ from app.models.api_token import ApiToken
 from app.models.user import User
 from app.rate_limit import limiter
 from app.security import generate_token, hash_password, hash_token, verify_password
+from app.token_scope import COACH, FULL
 
 router = APIRouter()
 
@@ -56,6 +57,8 @@ class TokenOut(_CamelModel):
     last_used_at: datetime | None
     last_user_agent: str | None
     expires_at: datetime | None
+    # "full" or "coach" (app/token_scope.py).
+    scope: str
 
 
 class MeResponse(_CamelModel):
@@ -76,6 +79,10 @@ class ChangePasswordResponse(_CamelModel):
 class MintTokenRequest(_CamelModel):
     name: str
     expires_at: AwareDatetime | None = None
+    # "coach" for a token that is going into an assistant: it can do what the
+    # coach's tools do and nothing else (app/token_scope.py). The default is
+    # what this endpoint has always made.
+    scope: Literal["full", "coach"] = FULL
 
     @field_validator("name")
     @classmethod
@@ -237,11 +244,13 @@ def change_password(
 @router.post("/tokens", response_model=MintTokenResponse, status_code=status.HTTP_201_CREATED)
 def mint_token(body: MintTokenRequest, user: CurrentUser, db: DbSession) -> MintTokenResponse:
     raw = generate_token()
-    token = ApiToken(user_id=user.id, token_hash=hash_token(raw), name=body.name, expires_at=body.expires_at)
+    token = ApiToken(
+        user_id=user.id, token_hash=hash_token(raw), name=body.name, expires_at=body.expires_at, scope=body.scope
+    )
     db.add(token)
     record_auth_event(
         db, "token_created", username=user.username, user_id=user.id, actor_user_id=user.id,
-        detail={"name": body.name},
+        detail={"name": body.name, **({"scope": COACH} if body.scope == COACH else {})},
     )
     db.commit()
     db.refresh(token)

@@ -18,10 +18,12 @@ The flow, and who makes each request:
 
 Things worth not re-deriving:
 
-- **The token is an ordinary `api_tokens` row.** The MCP already forwards the
-  caller's bearer token to the API, so nothing downstream knows or cares how a
-  token was obtained, and it shows up under Settings like any other, where
-  the athlete can revoke it. It does not expire and there is no refresh token:
+- **The token is an `api_tokens` row like any other, of the `coach` kind**
+  (app/token_scope.py): good for what the coach's tools call and refused
+  everywhere else. The MCP already forwards the caller's bearer token to the
+  API, so nothing downstream knows or cares how a token was obtained, and it
+  shows up under Settings with the rest, where the athlete can revoke it. It
+  does not expire and there is no refresh token:
   that is what every other coach token already is, and a refresh that fails
   disconnects the coach for a reason the athlete cannot see.
 - **The request handling is the MCP SDK's, not ours.** `AuthorizationHandler`
@@ -69,6 +71,7 @@ from app.models.api_token import ApiToken
 from app.models.oauth import OAuthAuthorization
 from app.models.user import User
 from app.security import generate_token, hash_token
+from app.token_scope import COACH
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -481,10 +484,12 @@ class CoachOAuthProvider:
 
         raw = generate_token()
         name = f"Coach · {client_label(row.client_id, row.client_name)}"
-        self.db.add(ApiToken(user_id=user.id, token_hash=hash_token(raw), name=name))
+        # A coach token: the assistant can do what the coach's tools do and
+        # nothing else with it (app/token_scope.py).
+        self.db.add(ApiToken(user_id=user.id, token_hash=hash_token(raw), name=name, scope=COACH))
         record_auth_event(
             self.db, "token_created", username=user.username, user_id=user.id, actor_user_id=user.id,
-            ip=client_ip(self.request), detail={"name": name, "via": "oauth"},
+            ip=client_ip(self.request), detail={"name": name, "via": "oauth", "scope": COACH},
         )
         self.db.commit()
         return raw

@@ -63,6 +63,18 @@ function eventView(e: AuthEventRow): { icon: Icon; text: string; tone: 'ok' | 'w
       // user (stranded household device, warn); unknown tokens don't (bad).
       const reason = str(e.detail?.reason)
       const hint = str(e.detail?.token_hint)
+      if (reason === 'scope') {
+        // A coach token used for something no coach tool does: the athlete's
+        // own client pointed at the wrong token, or a leaked one being tried.
+        const what = [str(e.detail?.method), str(e.detail?.path)].filter(Boolean).join(' ')
+        return {
+          icon: ShieldWarning,
+          text: `${who}'s coach token${tokenName ? ` “${tokenName}”` : ''} was refused outside the coach${
+            what ? ` (${what})` : ''
+          }`,
+          tone: 'warn',
+        }
+      }
       if (reason === 'expired' || reason === 'inactive') {
         return {
           icon: Key,

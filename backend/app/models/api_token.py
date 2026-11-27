@@ -1,15 +1,19 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.token_scope import FULL
 
 
 class ApiToken(Base):
     __tablename__ = "api_tokens"
+    # In the model as well as the migration: the test schema is built from the
+    # models, and a value the tests accept must be one the database accepts.
+    __table_args__ = (CheckConstraint("scope IN ('full', 'coach')", name="ck_api_tokens_scope"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -26,5 +30,8 @@ class ApiToken(Base):
     last_user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
     # NULL = long-lived (device tokens); dashboard cookies get a finite expiry.
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # `full` is the athlete; `coach` is held to what the coach's tools call
+    # (app/token_scope.py). Tokens from before the column are `full`.
+    scope: Mapped[str] = mapped_column(String(16), nullable=False, default=FULL, server_default=FULL)
 
     user: Mapped["User"] = relationship("User", back_populates="tokens")  # noqa: F821

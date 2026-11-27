@@ -215,14 +215,15 @@ function NewTokenModal({ onClose }: { onClose: () => void }) {
         New token
       </div>
       <div style={{ fontSize: 12.5, color: 'var(--muted)', margin: '5px 0 20px' }}>
-        For hooking up a device or integration (e.g. a personal MCP) without logging in there.
+        For a script or integration of your own. It can do everything you can, so for an AI assistant use{' '}
+        <strong>Connect</strong> instead: that token works for the coach only.
       </div>
 
       <div className="field-label">Name</div>
       <input
         className="field-input"
         style={{ marginBottom: 14 }}
-        placeholder="Coach MCP"
+        placeholder="My script"
         autoFocus
         value={name}
         onChange={(e) => setName(e.target.value)}
@@ -427,7 +428,8 @@ function ConnectCoachModal({ onClose }: { onClose: () => void }) {
       ) : (
         <>
           <div style={{ fontSize: 13, color: 'var(--text-3)', lineHeight: 1.55 }}>
-            This creates a token named <strong>Coach · {clientName}</strong> and shows the setup for it.
+            This creates a token named <strong>Coach · {clientName}</strong> and shows the setup for it. The token
+            works for the coach only: it cannot manage your account or your other tokens.
             The coach connects to <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{url}</span>, so the
             app has to be able to reach this address.
           </div>
@@ -444,7 +446,7 @@ function ConnectCoachModal({ onClose }: { onClose: () => void }) {
               className="btn-accent"
               style={{ flex: 1 }}
               disabled={mint.isPending}
-              onClick={() => mint.mutate({ name: `Coach · ${clientName}` })}
+              onClick={() => mint.mutate({ name: `Coach · ${clientName}`, scope: 'coach' })}
             >
               {mint.isPending ? 'Creating…' : 'Create token & show setup'}
             </button>
@@ -582,6 +584,11 @@ export function Settings() {
                   <div className="t-name">
                     {t.name || 'Unnamed token'}
                     {isCurrent && <span className="t-this">This device</span>}
+                    {t.scope === 'coach' && (
+                      <span className="t-coach" title="Works for the coach only: it cannot manage your account, your tokens or what you share.">
+                        Coach only
+                      </span>
+                    )}
                   </div>
                   <div className="t-meta">{tokenMeta(t)}</div>
                 </div>
