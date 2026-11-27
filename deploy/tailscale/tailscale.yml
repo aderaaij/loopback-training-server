@@ -14,8 +14,9 @@
 #   COMPOSE_FILE=docker-compose.yml:deploy/tailscale/tailscale.yml
 #
 # then `docker compose up -d`, and `docker compose logs tailscale` for the
-# link that adds the node to your tailnet (or set TS_AUTHKEY and skip the
-# link). See README "Exposing the server".
+# link that adds the node to your tailnet. The link waits for you: there is
+# no hurry. (Or set TS_AUTHKEY and skip the link.) See README "Exposing the
+# server".
 #
 # What reaches the server from the internet is listed in serve.json, next to
 # this file: /mcp, /oauth/token and two documents under /.well-known.
@@ -58,6 +59,38 @@ services:
       # and a second device by the same name in the admin console.
       - tailscale_state:/var/lib/tailscale
       - ./deploy/tailscale/serve.json:/config/serve.json:ro
+    # Sign in first, then start the image's own program (containerboot).
+    #
+    # Left to itself, containerboot gives a person 60 seconds to open the
+    # sign-in link, then exits. The restart makes a new key and prints a new
+    # link, so a link opened a minute late signs in a key that no longer
+    # exists: the admin console gains a dead device and this one is still
+    # signed out. So, for a node that is signed out and has no TS_AUTHKEY,
+    # this waits on one link for as long as it takes. A signed-in node, or
+    # one with a key, goes straight on.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        if [ -z "$$TS_AUTHKEY" ]; then
+          sock=/tmp/sign-in.sock
+          tailscaled --tun=userspace-networking --statedir="$$TS_STATE_DIR" --socket="$$sock" >/dev/null 2>&1 &
+          daemon=$$!
+          state=
+          while [ -z "$$state" ] || [ "$$state" = NoState ]; do
+            sleep 1
+            state=$$(tailscale --socket="$$sock" status --json 2>/dev/null | sed -n 's/.*"BackendState": *"\([A-Za-z]*\)".*/\1/p')
+          done
+          if [ "$$state" = NeedsLogin ]; then
+            echo "This server is not on your tailnet yet. The link below adds it, and stays good until you use it."
+            tailscale --socket="$$sock" login --hostname="$$TS_HOSTNAME"
+            echo "Signed in."
+          fi
+          kill "$$daemon"
+          wait "$$daemon" || true
+          rm -f "$$sock"
+        fi
+        exec /usr/local/bin/containerboot
     depends_on:
       - app
     restart: unless-stopped

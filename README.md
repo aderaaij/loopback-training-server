@@ -129,7 +129,7 @@ Then `docker compose up -d`. This adds a [Caddy](https://caddyserver.com) contai
 COMPOSE_FILE=docker-compose.yml:deploy/tailscale/tailscale.yml
 ```
 
-Then `docker compose up -d`, and `docker compose logs tailscale`: the log shows a link that adds the server to your tailnet. Open it and approve. (To skip the link, put an [auth key](https://tailscale.com/kb/1085/auth-keys) in `.env` as `TS_AUTHKEY`.) The device is called `loopback`; set `TS_HOSTNAME` for another name.
+Then `docker compose up -d`, and `docker compose logs tailscale`: the log shows a link that adds the server to your tailnet. Open it and approve; there is no hurry, the link waits until you use it. (To skip the link, put an [auth key](https://tailscale.com/kb/1085/auth-keys) in `.env` as `TS_AUTHKEY`.) The device is called `loopback`; set `TS_HOSTNAME` for another name.
 
 The server then has two entrances, both at `loopback.<your-tailnet>.ts.net`:
 
