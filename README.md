@@ -38,7 +38,7 @@ Built with FastAPI, PostgreSQL, SQLAlchemy, and React. Includes a built-in MCP (
 - **Multi-user** — Username/password accounts with per-device API tokens (`POST /api/auth/login`); all data is scoped per user
 - **Web dashboard** — Authenticated React SPA served same-origin by the API: overview, calendar, workouts, plans, health charts, and queue for athletes; user management and system monitoring for admins
 - **Admin & monitoring** — Per-user token inspection/revoke (cut off one stolen device), sync-freshness per athlete, an auth audit trail (logins, password/token/user changes), and a system screen reporting DB size and backup freshness
-- **MCP server** — Built in at `/mcp`: let AI assistants query your training data, create workouts and plans, and correlate health metrics via natural language. Claude connects by signing in with OAuth (paste the address once, approve in the dashboard, and it works on the web, the phone and the desktop app); other tools, and Claude Desktop on a server that is not reachable from the internet, use a token
+- **MCP server** — Built in at `/mcp`: let AI assistants query your training data, create workouts and plans, and correlate health metrics via natural language. Claude and ChatGPT connect by signing in with OAuth (paste the address once and approve in the dashboard; for Claude that covers the web, the phone and the desktop app); other tools, and Claude Desktop on a server that is not reachable from the internet, use a token
 
 ## Quick Start
 
@@ -405,15 +405,15 @@ Each person connects as **themselves**, so the data is scoped to their account �
 
 The quickest way: in the dashboard, **Settings → AI coach → Connect** shows the setup for your client: an extension to install for Claude Desktop, the address to paste for Claude on the web and phone, and for the others a snippet with the server address and a new token already filled in. The sections below are the same thing by hand; substitute your server's address and your token.
 
-There are two ways to connect, and for Claude you only need one of them:
+There are two ways to connect, and for any one assistant you only need one of them:
 
 | | Sign in (OAuth) | A token |
 |---|---|---|
-| **Covers** | Claude everywhere at once: on the web, in the phone apps and in Claude Desktop. The connection belongs to your Claude account, so you set it up once | The one app you set it up in: Claude Desktop (through the Loopback extension), Claude Code, Cursor, VS Code and other clients on your computer |
+| **Covers** | Claude everywhere at once: on the web, in the phone apps and in Claude Desktop. The connection belongs to your Claude account, so you set it up once. ChatGPT connects the same way | The one app you set it up in: Claude Desktop (through the Loopback extension), Claude Code, Cursor, VS Code and other clients on your computer |
 | **You do** | Paste the server's address in Claude and approve in the dashboard ([steps](#signing-in-from-an-assistant)) | Create a token in the dashboard and give it to that app (below) |
 | **Your server needs** | To be reachable from the internet over HTTPS: [built-in HTTPS](#built-in-https-a-server-with-a-public-ip-and-a-domain) on a server with a domain, or the [Tailscale add-on](#tailscale-a-home-server-no-domain-no-open-ports) on a home server | To be reachable from the computer the app runs on; a home network or tailnet is enough |
 
-So: if your server can be reached from the internet, sign in once from Claude and you are done for the web, your phone and Claude Desktop. The token route is for Claude Desktop on a server that cannot be reached from the internet, and for tools other than Claude.
+So: if your server can be reached from the internet, sign in once from Claude and you are done for the web, your phone and Claude Desktop. ChatGPT signs in the same way, from its own connector settings. The token route is for Claude Desktop on a server that cannot be reached from the internet, and for tools that run on your computer.
 
 Signing in is new in 0.1.30. Everything that worked with a token before still does, unchanged.
 
@@ -519,7 +519,7 @@ What this needs:
 
 Only the coach has to be public for this, not the dashboard. Everything Anthropic's servers call is `/mcp`, `/oauth/token` and two documents under `/.well-known/`. The pages you sign in and approve on are opened by your own browser only, so they can stay on a private address, and no page that takes a password is then on the internet. The Tailscale add-on is set up this way. To do the same behind a proxy of your own, publish only those paths and tell the server where the dashboard is: `OAUTH_AUTHORIZATION_PORT` if it is the same name on another port, `OAUTH_AUTHORIZATION_ORIGIN` if it is another name.
 
-This has been used with claude.ai. Other assistants that sign in with OAuth can connect the same way, as long as they identify themselves with a published client document (the newer of the two ways an MCP client can introduce itself; Claude Code does too, though signing in from it has not been tried here). An assistant Loopback does not know is shown by its web address on the approval page, with a warning. Assistants that expect to register themselves with the server first are not supported yet, and neither are ones that want the answer sent to an address scheme of their own instead of https.
+This has been used with claude.ai and, since 0.1.32, with ChatGPT: add the same address as a connector there and approve it the same way. Other assistants that sign in with OAuth can connect too, as long as they identify themselves with a published client document (the newer of the two ways an MCP client can introduce itself; Claude Code does, though signing in from it has not been tried here). An assistant Loopback does not know is shown by its web address on the approval page, with a warning. Assistants that expect to register themselves with the server first are not supported yet, and neither are ones that want the answer sent to an address scheme of their own instead of https.
 
 **Cursor** (`~/.cursor/mcp.json`)
 
