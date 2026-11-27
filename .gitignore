@@ -14,6 +14,10 @@ mcp/config/.env
 # Deployment-specific compose overrides (host paths etc.)
 docker-compose.override.yml
 
+# Database dumps the server writes itself (BACKUP_HOST_DIR defaults to
+# ./backups). They hold real data, and this repo is public.
+backups/
+
 # Local working notes (handoff docs, plans) — not part of the shared repo
 docs/
 
