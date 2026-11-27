@@ -38,7 +38,7 @@ Built with FastAPI, PostgreSQL, SQLAlchemy, and React. Includes a built-in MCP (
 - **Multi-user** — Username/password accounts with per-device API tokens (`POST /api/auth/login`); all data is scoped per user
 - **Web dashboard** — Authenticated React SPA served same-origin by the API: overview, calendar, workouts, plans, health charts, and queue for athletes; user management and system monitoring for admins
 - **Admin & monitoring** — Per-user token inspection/revoke (cut off one stolen device), sync-freshness per athlete, an auth audit trail (logins, password/token/user changes), and a system screen reporting DB size and backup freshness
-- **MCP server** — Built in at `/mcp`: let AI assistants query your training data, create workouts and plans, and correlate health metrics via natural language. Claude on the web and phone connects by signing in with OAuth (paste the address, approve in the dashboard); other clients use a token or the Claude Desktop extension
+- **MCP server** — Built in at `/mcp`: let AI assistants query your training data, create workouts and plans, and correlate health metrics via natural language. Claude connects by signing in with OAuth (paste the address once, approve in the dashboard, and it works on the web, the phone and the desktop app); other tools, and Claude Desktop on a server that is not reachable from the internet, use a token
 
 ## Quick Start
 
@@ -405,15 +405,17 @@ Each person connects as **themselves**, so the data is scoped to their account �
 
 The quickest way: in the dashboard, **Settings → AI coach → Connect** shows the setup for your client: an extension to install for Claude Desktop, the address to paste for Claude on the web and phone, and for the others a snippet with the server address and a new token already filled in. The sections below are the same thing by hand; substitute your server's address and your token.
 
-Which way applies to you:
+There are two ways to connect, and for Claude you only need one of them:
 
-| Assistant | How it connects | What your server needs |
+| | Sign in (OAuth) | A token |
 |---|---|---|
-| **Claude on the web** (claude.ai) and the **Claude phone apps** | [Signs in with OAuth](#signing-in-from-an-assistant): paste the address, approve in the dashboard. No token to create | To be reachable from the internet over HTTPS: [built-in HTTPS](#built-in-https-a-server-with-a-public-ip-and-a-domain) on a server with a domain, or the [Tailscale add-on](#tailscale-a-home-server-no-domain-no-open-ports) on a home server |
-| **Claude Desktop** | The Loopback extension and a token (below). Its Connectors screen works like the web instead | To be reachable from your computer; a home network or tailnet is enough |
-| **Claude Code, Cursor, VS Code** and other clients on your computer | The address and a token in a header (below) | To be reachable from your computer |
+| **Covers** | Claude everywhere at once: on the web, in the phone apps and in Claude Desktop. The connection belongs to your Claude account, so you set it up once | The one app you set it up in: Claude Desktop (through the Loopback extension), Claude Code, Cursor, VS Code and other clients on your computer |
+| **You do** | Paste the server's address in Claude and approve in the dashboard ([steps](#signing-in-from-an-assistant)) | Create a token in the dashboard and give it to that app (below) |
+| **Your server needs** | To be reachable from the internet over HTTPS: [built-in HTTPS](#built-in-https-a-server-with-a-public-ip-and-a-domain) on a server with a domain, or the [Tailscale add-on](#tailscale-a-home-server-no-domain-no-open-ports) on a home server | To be reachable from the computer the app runs on; a home network or tailnet is enough |
 
-OAuth sign-in is new in 0.1.30. It is for assistants that run in the cloud and cannot be handed a token; everything that worked with a token before still does, unchanged.
+So: if your server can be reached from the internet, sign in once from Claude and you are done for the web, your phone and Claude Desktop. The token route is for Claude Desktop on a server that cannot be reached from the internet, and for tools other than Claude.
+
+Signing in is new in 0.1.30. Everything that worked with a token before still does, unchanged.
 
 **Claude Code**
 
@@ -425,7 +427,7 @@ claude mcp add training --scope user --transport http \
 
 `--scope user` makes the server available in every folder. To replace an existing entry (for example after rotating the token), run `claude mcp remove training --scope user` first; `add` refuses to overwrite.
 
-**Claude Desktop**
+**Claude Desktop** (with the extension, for a server that is not reachable from the internet)
 
 Claude Desktop cannot send a bearer token to a remote server by itself, so Loopback hands out a small **extension** that does it. Nothing else has to be installed, and no config file is edited.
 
@@ -436,7 +438,7 @@ Claude Desktop cannot send a bearer token to a remote server by itself, so Loopb
    Claude Desktop warns that an extension can access your computer, and lists the developer as unknown. That is expected: it shows both for an extension that is installed from a file and is not signed. This one reads no files. It only passes messages between Claude Desktop and your server, and its two small scripts are readable in [`backend/app/desktop_extension/server`](backend/app/desktop_extension/server).
 4. Ask in a new chat: *"What did I run this week?"*
 
-**Settings → Connectors → Add custom connector** in Claude Desktop is a different route: it connects from Anthropic's servers, not from your computer, so it only works for a server that can be reached from the internet (see [Signing in from an assistant](#signing-in-from-an-assistant)). For a server on your home network or tailnet, the extension is the way.
+You need the extension only when your server cannot be reached from the internet. If it can, [sign in from Claude](#signing-in-from-an-assistant) instead: that one connection also covers Claude Desktop, and you can skip this section. (Do one or the other in Claude Desktop, not both, or the coach is there twice.)
 
 The extension is one small script that passes messages between Claude Desktop and `/mcp` on your server, run by the Node.js that Claude Desktop ships. If the server restarts while Claude Desktop is open (an upgrade, a reboot), the extension reconnects by itself. The download is the same for everyone on the server: it holds the address but never a token, so it is safe to pass on to someone else in the household, who then pastes their own.
 
@@ -497,14 +499,16 @@ Why the config looks like this: the token goes in `env` and is referenced as `${
 
 </details>
 
-<a id="signing-in-from-an-assistant"></a>**Claude on the web and phone** (signing in with OAuth)
+<a id="signing-in-from-an-assistant"></a>**Claude: web, phone and desktop** (signing in with OAuth)
 
 claude.ai and the Claude phone apps cannot be given a token. They sign in instead, with OAuth: you paste the server's address, approve the connection in the Loopback dashboard, and Claude is handed a token of its own.
 
 1. In Claude, open **Settings → Connectors** and choose **Add custom connector**.
-2. Paste your server's address followed by `/mcp` (the dashboard shows it under **Settings → AI coach → Connect → Claude (web & phone)**) and add it.
+2. Paste your server's address followed by `/mcp` (the dashboard shows it under **Settings → AI coach → Connect**, in the entry for Claude) and add it.
 3. Click **Connect**. Your browser opens the Loopback dashboard, which asks you to sign in if you are not, and then whether to let Claude act as your coach. Choose **Allow**.
-4. Ask in a new chat: *"What did I run this week?"* A connector added on the web is there in the phone app too.
+4. Ask in a new chat: *"What did I run this week?"*
+
+That is the whole setup for Claude. The connector belongs to your Claude account, so it is there in the Claude phone apps and in Claude Desktop too, with nothing to repeat on them. (In Claude Desktop you can also start from its own **Settings → Connectors**; it is the same connector.)
 
 The connection then shows up as **Coach · Claude** under **Settings → Devices & tokens**, where **Revoke** disconnects it. Claude never sees your password.
 
