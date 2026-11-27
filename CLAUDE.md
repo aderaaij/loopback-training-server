@@ -408,6 +408,12 @@ The MCP server (`mcp/`) exposes training data to Claude via FastMCP. It talks to
     PKCE verifier. Checking the signature would mean advertising `private_key_jwt` in the
     server metadata, at which point Claude switches to a second, signing client document,
     i.e. a different flow from the one that was tested.
+  - **Checked with ChatGPT on 2026-11-27**, on this deployment after 0.1.32: sign-in,
+    approval and token exchange, then `initialize` and `tools/list`; no tool call from a
+    chat was seen that day. It sent `ui_locales` on the authorize request (ignored), made
+    no difficulty about a token without expiry or refresh token, and opened the GET
+    stream on `/mcp`, which Claude does not. Its token request came from `70.156.152.105`,
+    outside Anthropic's range: an allowlist of that range would have kept it out.
   - ⚠️ **A redirect address being on the client's own list is not enough.** FastMCP's
     document model and its own redirect check both accept `javascript://host/%0Aalert(1)`,
     and the approval page sends the browser to that address on Allow *and* on Cancel, which
