@@ -31,6 +31,8 @@ CLAUDE_CALLBACK = "https://claude.ai/api/mcp/auth_callback"
 CLAUDE_CODE = "https://claude.ai/oauth/claude-code-client-metadata"
 STRANGER = "https://assistant.example/client.json"
 SIGNING = "https://signing.example/client.json"
+CHATGPT = "https://chatgpt.com/oauth/liW_65JNbHVJ/client.json"
+CHATGPT_CALLBACK = "https://chatgpt.com/connector/oauth/liW_65JNbHVJ"
 
 DOCUMENTS = {
     CLAUDE: {
@@ -60,6 +62,20 @@ DOCUMENTS = {
         "redirect_uris": ["https://signing.example/callback"],
         "token_endpoint_auth_method": "private_key_jwt",
         "jwks": {"keys": []},
+    },
+    # As ChatGPT published it on 2026-11-27 (one document per connector).
+    CHATGPT: {
+        "client_id": CHATGPT,
+        "client_uri": "https://chatgpt.com/",
+        "redirect_uris": [CHATGPT_CALLBACK],
+        "token_endpoint_auth_method": "private_key_jwt",
+        "token_endpoint_auth_methods_supported": ["none", "private_key_jwt"],
+        "grant_types": ["authorization_code", "refresh_token"],
+        "response_types": ["code"],
+        "client_name": "ChatGPT",
+        "logo_uri": "https://persistent.oaistatic.com/sonic/misc/openai-logo.png",
+        "token_endpoint_auth_signing_alg": "RS256",
+        "jwks_uri": "https://chatgpt.com/oauth/jwks.json",
     },
 }
 
@@ -429,13 +445,42 @@ def test_a_client_id_that_is_not_a_document_address_is_never_fetched(anon, docum
     assert documents == []
 
 
-# Nothing here checks the signature such a client puts on its token requests.
-def test_a_client_that_signs_its_requests_is_turned_away(anon):
-    r = anon.get(
-        "/oauth/authorize",
-        params=authorize_params(client_id=SIGNING, redirect_uri="https://signing.example/callback"),
-    )
-    assert r.status_code == 400
+# ChatGPT's document says it signs its token requests. This server offers one
+# method, none, so it is taken as a public client like any other. The first
+# version refused it, which kept ChatGPT out and protected nothing.
+def test_chatgpt_can_sign_in(anon, client_a):
+    request_id = start(anon, client_id=CHATGPT, redirect_uri=CHATGPT_CALLBACK, ui_locales="en-US")
+    shown = client_a.get(f"/api/oauth/requests/{request_id}").json()
+    assert shown["clientName"] == "ChatGPT"
+    assert shown["clientHost"] == "chatgpt.com"
+    assert shown["recognised"] is True
+
+    back = approve(client_a, request_id)
+    assert back["_base"] == CHATGPT_CALLBACK
+    r = trade(anon, back["code"], client_id=CHATGPT, redirect_uri=CHATGPT_CALLBACK)
+    assert r.status_code == 200, r.text
+    me = TestClient(app).get("/api/auth/me", headers={"Authorization": f"Bearer {r.json()['access_token']}"})
+    assert "Coach · ChatGPT" in [t["name"] for t in me.json()["tokens"]]
+
+
+# A signature such a client sends along is not looked at, and changes nothing
+# about what is: the code still has to come with the verifier it was made for.
+def test_a_client_that_signs_its_requests_is_held_to_the_same_checks(anon, client_a):
+    signed = {
+        "client_id": SIGNING,
+        "redirect_uri": "https://signing.example/callback",
+        "client_assertion_type": "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+        "client_assertion": "not.a.real-signature",
+    }
+    code = approve(client_a, start(anon, client_id=SIGNING, redirect_uri="https://signing.example/callback"))["code"]
+    wrong = trade(anon, code, code_verifier="not-the-verifier-that-made-the-challenge-0000000", **signed)
+    assert wrong.status_code == 400
+    assert wrong.json()["error"] == "invalid_grant"
+
+    assert trade(anon, code, **signed).status_code == 200
+    # Still shown by its host: only clients this server knows get their own name.
+    request_id = start(anon, client_id=SIGNING, redirect_uri="https://signing.example/callback")
+    assert client_a.get(f"/api/oauth/requests/{request_id}").json()["recognised"] is False
 
 
 def test_the_code_only_goes_to_an_address_the_client_lists(anon):

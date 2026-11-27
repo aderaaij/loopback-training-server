@@ -398,6 +398,16 @@ The MCP server (`mcp/`) exposes training data to Claude via FastMCP. It talks to
     server metadata carries both `client_id_metadata_document_supported: true` and `none`
     in `token_endpoint_auth_methods_supported`. A client that expects to register itself
     is not supported.
+  - **A client whose document declares `private_key_jwt` is accepted as a public client**,
+    its signature not looked at. ChatGPT's document does (one per connector,
+    `https://chatgpt.com/oauth/<id>/client.json`, which also lists `none` in a
+    non-standard `token_endpoint_auth_methods_supported`). 0.1.30 refused such clients
+    ("Client ID … not found" in the browser, a "uses private_key_jwt" warning in the log)
+    on the idea that an unchecked signature is worse than none. It is not: the code only
+    goes to an address the client's own document lists and cannot be traded without the
+    PKCE verifier. Checking the signature would mean advertising `private_key_jwt` in the
+    server metadata, at which point Claude switches to a second, signing client document,
+    i.e. a different flow from the one that was tested.
   - ⚠️ **A redirect address being on the client's own list is not enough.** FastMCP's
     document model and its own redirect check both accept `javascript://host/%0Aalert(1)`,
     and the approval page sends the browser to that address on Allow *and* on Cancel, which

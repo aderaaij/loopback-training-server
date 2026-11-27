@@ -87,7 +87,7 @@ CODE_TTL = timedelta(minutes=2)
 # Clients whose own name is shown on the approval page. Anyone can publish a
 # metadata document that calls itself "Claude"; for every other host the page
 # leads with the host, which cannot be made up.
-RECOGNISED_CLIENT_HOSTS = frozenset({"claude.ai"})
+RECOGNISED_CLIENT_HOSTS = frozenset({"claude.ai", "chatgpt.com"})
 
 _LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 _HOST_RE = re.compile(r"^(?:[A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(?::\d{1,5})?$")
@@ -280,12 +280,16 @@ async def resolve_client(client_id: str) -> CoachClient | None:
     except (CIMDFetchError, CIMDValidationError) as exc:
         logger.warning("OAuth: could not read client metadata at %s: %s", client_id, exc)
         return None
-    if document.token_endpoint_auth_method != "none":
-        # A client that signs its token requests. Nothing here checks such a
-        # signature, and accepting the client without checking it would be
-        # worse than refusing it.
-        logger.warning("OAuth: client %s uses %s, which is not supported", client_id, document.token_endpoint_auth_method)
-        return None
+    # A document may say the client signs its token requests
+    # (`private_key_jwt`; ChatGPT's does, while also listing `none`). This
+    # server offers one method, `none`, and says so in its own metadata, so
+    # such a client is taken as it is: a public client like any other, whose
+    # signature, if it sends one, is not looked at.
+    #
+    # Refusing it, as this did at first, kept ChatGPT out and protected
+    # nothing. A code only ever goes to an address the client's own document
+    # lists, and cannot be traded without the PKCE verifier that only whoever
+    # started the flow holds. A signature would prove the same thing twice.
     return CoachClient(
         client_id=client_id,
         client_name=_clean(document.client_name),

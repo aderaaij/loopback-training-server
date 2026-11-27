@@ -12,6 +12,16 @@ System screen.
 
 ## [Unreleased]
 
+### Fixed
+
+- **ChatGPT was turned away when signing in**, with "Client ID … not found".
+  Its client document says it can sign its token requests, and the server
+  refused every client that says so, because it does not check such
+  signatures. That refusal protected nothing: a code is only sent to the
+  address in the client's own document and cannot be used without the proof
+  that already guards every sign-in. Such a client is now accepted like any
+  other, and ChatGPT is shown by name on the approval page.
+
 ### Changed
 
 - The Connect dialog's entry for signing in is now called **Claude (web,
