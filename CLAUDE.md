@@ -495,10 +495,20 @@ The MCP server (`mcp/`) exposes training data to Claude via FastMCP. It talks to
     although sign-in and the Connect dialog are what produce that name, because someone
     may be using such a token for something else. Narrowing one means revoking it and
     connecting again.
-  - ⚠️ **An older image on the upgraded database treats coach tokens as full ones**: it
-    does not read the column. Rolling back `IMAGE_TAG` alone widens every coach token
-    until the newer image is back. The migration's own downgrade deletes them for that
-    reason.
+  - **An older image does not run on the upgraded database at all**, so coach tokens
+    cannot quietly become full ones by setting `IMAGE_TAG` back: `start.sh` runs
+    `alembic upgrade head`, which stops on a revision it does not know ("Can't locate
+    revision identified by 'a9b0c1d2e3f4'", tried with the 0.1.32 image on 2026-11-27;
+    the container exits and nothing is served). That holds for every release with a
+    migration: going back is the pre-migration dump, or the migration's downgrade run
+    from the newer image first. This migration's downgrade deletes coach tokens, because
+    without the column they would come out as full ones. An earlier version of this note
+    claimed the opposite (older image serves and widens the tokens); the reviewer of the
+    change doubted it and trying it settled it.
+  - **Anything that is not `full` is treated as a coach token** in both checks
+    (`!= FULL` in `get_current_user` and `get_consent_scope`), so a third kind added
+    later is refused and filtered until someone decides otherwise, and a request on
+    which no kind was noted is filtered too.
   - The backend's environment holds a *built copy* of `training_mcp`, which on a
     developer's machine can be older than `mcp/` (it lacked the shoe, fuel and setback
     calls on 2026-11-27 and the comparison failed for that reason alone). The test reads

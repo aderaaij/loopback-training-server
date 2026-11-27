@@ -48,8 +48,12 @@ def coach_a(client_a) -> TestClient:
 
 # ── the list against the coach's client ──
 
-_REQUEST = re.compile(r'self\._request\(\s*"([A-Z]+)",\s*f?"([^"?]+)')
-_DELETE = re.compile(r'self\._delete\(\s*f?"([^"?]+)')
+# A call as the client writes them: the method and the path as literals, the
+# path being the whole argument. One whose path goes on after its closing
+# quote (`"/api/x" + suffix`) does not match, and is then caught by the count
+# in the first test below instead of being read as the shorter path.
+_REQUEST = re.compile(r'self\._request\(\s*"([A-Z]+)",\s*f?"(/api/[^"?]*)"\s*[,)]')
+_DELETE = re.compile(r'self\._delete\(\s*f?"(/api/[^"?]*)"\s*[,)]')
 
 # The coach's client as it is in this checkout (`mcp/` sits next to `backend/`,
 # and at /mcp next to /app in the image). The backend's environment holds a
@@ -86,11 +90,17 @@ def test_every_request_the_client_makes_can_be_read_from_its_source():
     source = CLIENT.read_text()
     assert len(_REQUEST.findall(source)) == source.count("self._request(")
     assert len(_DELETE.findall(source)) == source.count("self._delete(")
-    # And nothing else in the package talks to the API on its own.
+    # Those two helpers are the only places a request leaves the client. A
+    # third one that sends its own would be a call nothing here reads.
+    assert source.count("httpx.AsyncClient(") == 2
+    # And nothing else in the package talks to the API, on its own or by
+    # reaching into the client's helpers from another file.
     package = CLIENT.parents[1]
     assert package.name == "training_mcp"
-    elsewhere = [p.name for p in package.rglob("*.py") if "httpx" in p.read_text() and p != CLIENT]
-    assert elsewhere == []
+    others = [p for p in package.rglob("*.py") if p != CLIENT]
+    assert len(others) > 10
+    for needle in ("httpx", "._request(", "._delete("):
+        assert [p.name for p in others if needle in p.read_text()] == [], needle
 
 
 def test_the_list_is_exactly_what_the_coach_calls():
@@ -105,6 +115,29 @@ def test_the_list_is_exactly_what_the_coach_calls():
 # ── what a coach token is refused ──
 
 
+# Everything the app answers without a token. The walk below sorts every
+# route into "asks for a token" or this list, so a new route that is neither
+# (one that checks a token some way of its own, which is the one kind the
+# refusal in get_current_user would not cover) fails the test by name.
+PUBLIC = {
+    ("GET", "/api/health"),
+    ("POST", "/api/auth/login"),
+    ("GET", "/api/auth/setup"),
+    ("POST", "/api/auth/setup"),
+    ("GET", "/.well-known/oauth-protected-resource"),
+    ("GET", "/.well-known/oauth-protected-resource/mcp"),
+    ("GET", "/.well-known/oauth-authorization-server"),
+    ("GET", "/oauth/authorize"),
+    ("POST", "/oauth/authorize"),
+    ("POST", "/oauth/token"),
+    # The dashboard's own files.
+    ("GET", "/"),
+    ("GET", "/{full_path:path}"),
+}
+# FastAPI's own pages, which are plain Starlette routes.
+DOCS = {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
+
+
 def _routes_taking_a_token() -> list[tuple[str, str]]:
     """Every method and path in the app that asks for a bearer token.
 
@@ -113,14 +146,21 @@ def _routes_taking_a_token() -> list[tuple[str, str]]:
     for a client it does not know, which has nothing to do with tokens.)
     """
     anon = TestClient(app)
-    found = []
+    found, public = [], set()
     for route in app.router.routes:
-        if not isinstance(route, APIRoute) or ":path" in route.path:
+        if not isinstance(route, APIRoute):
+            assert route.path in DOCS, f"a route of another kind: {route.path}"
             continue
         for method in sorted(route.methods - {"HEAD", "OPTIONS"}):
+            if ":path" in route.path:
+                public.add((method, route.path))
+                continue
             r = anon.request(method, re.sub(r"\{[^}]+\}", str(uuid.uuid4()), route.path))
             if r.status_code in (401, 403) and r.json() == {"detail": "Not authenticated"}:
                 found.append((method, route.path))
+            else:
+                public.add((method, route.path))
+    assert public == PUBLIC
     return found
 
 

@@ -40,8 +40,10 @@ System screen.
     release stays a full token, including the ones assistants hold. To swap one
     for a coach token, revoke it under Devices & tokens and connect that
     assistant again; Claude and ChatGPT then ask you to sign in once more.
-  - If you ever go back to 0.1.32 or older, revoke coach tokens first: an older
-    version does not know the difference and treats them as full tokens.
+  - This release changes the database. As with any such release, an older
+    version does not start on the upgraded database, so going back means
+    restoring a backup from before the upgrade (the server makes one before
+    it migrates, unless its backups are switched off).
 
 ### Changed
 

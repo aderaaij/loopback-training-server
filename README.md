@@ -196,6 +196,8 @@ docker compose pull && docker compose up -d
 
 Database migrations run automatically on startup, and an upgrade with pending migrations dumps the database first (see [Backups](#backups)). The running version is reported by `GET /api/health` and on the admin **System** screen. Versioning is semantic, with the usual 0.x caveat: **breaking changes bump the minor version** until 1.0, so `0.1 → 0.2` deserves a changelog read while `0.1.x → 0.1.y` is always safe.
 
+Going back is not the same as upgrading in reverse. After a release that changed the database, an older version refuses to start on it (the log says it cannot locate a revision), so setting `IMAGE_TAG` back is not enough: restore the backup from before the upgrade as well.
+
 ## Configuration
 
 Everything is configured through environment variables in the root `.env` (read by Docker Compose):

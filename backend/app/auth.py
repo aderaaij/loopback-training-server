@@ -12,7 +12,7 @@ from app.database import DbSession, SessionLocal
 from app.models.api_token import ApiToken
 from app.models.user import User
 from app.security import hash_token
-from app.token_scope import COACH, coach_may
+from app.token_scope import FULL, coach_may
 
 security = HTTPBearer()
 
@@ -114,7 +114,10 @@ def get_current_user(
         )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User is inactive")
 
-    if token.scope == COACH:
+    # Anything that is not a full token is held to the coach's list, so a kind
+    # of token added later is closed everywhere until someone decides what it
+    # may do, and never open by default.
+    if token.scope != FULL:
         # The route's own path (`/api/plans/{plan_id}`), which FastAPI records
         # when it matches the request; the caller has no say in it.
         route = getattr(request.scope.get("route"), "path", None)

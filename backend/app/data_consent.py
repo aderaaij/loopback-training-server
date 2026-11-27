@@ -33,7 +33,7 @@ from typing import Annotated, Iterable
 from fastapi import Depends, HTTPException, Request, status
 
 from app.auth import CurrentUser
-from app.token_scope import COACH
+from app.token_scope import FULL
 
 TRAINING = "training"
 RECOVERY = "recovery"
@@ -152,10 +152,11 @@ def get_consent_scope(request: Request, user: CurrentUser) -> ConsentScope:
     # scoped without being asked, which is what makes the athlete's choice
     # hold for it even on a direct call that leaves the header out.
     # `get_current_user` has run by now (`user` depends on it) and noted the
-    # token's kind on the request.
+    # token's kind on the request. Only a full token goes unfiltered: a kind
+    # this does not know, or a request on which nothing was noted, is scoped.
     applied = (
         bool(request.headers.get(CONSENT_SCOPE_HEADER, "").strip())
-        or getattr(request.state, "token_scope", None) == COACH
+        or getattr(request.state, "token_scope", None) != FULL
     )
     return ConsentScope(applied=applied, domains=frozenset(user.data_consent or DEFAULT_DOMAINS))
 
