@@ -38,6 +38,18 @@ System screen.
     for a proxy that does not pass the original `Host` header on.
   - **Settings → AI coach → Connect** has a **Claude (web & phone)** entry
     with the address to paste.
+- **A Tailscale add-on that puts only the coach on the internet**
+  (`deploy/tailscale/tailscale.yml`, enabled with one `COMPOSE_FILE` line in
+  `.env`). For a home server with no domain and no open ports: it gives the
+  server a Tailscale device of its own, with the dashboard, API and coach at
+  `https://<name>:8443` for devices on your tailnet, and the coach alone at
+  `https://<name>/mcp` for assistants that connect from the cloud. Everything
+  else is refused by Tailscale before it reaches the server, so no page that
+  takes a password is public. The device joins your tailnet through a link in
+  its log, or a `TS_AUTHKEY`.
+  - `OAUTH_AUTHORIZATION_PORT` tells the server that the pages you sign in and
+    approve on are on another port of the same name. The add-on sets it, so
+    there is no address to write down.
 
 ### Changed
 

@@ -74,6 +74,7 @@ services:
       # are optional and pass through only when set in the root .env.
       - PUBLIC_URL
       - OAUTH_AUTHORIZATION_ORIGIN
+      - OAUTH_AUTHORIZATION_PORT
       # Behind a reverse proxy: whose X-Forwarded-For to trust for the client
       # address (see README "Configuration"). Passes through only when set;
       # deploy/https/caddy.yml sets it itself.

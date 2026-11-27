@@ -56,8 +56,15 @@ def test_endpoint_serves_the_settings(client_a):
 
 # The dashboard shows an assistant the address it was itself opened at, unless
 # the server was told its public one: an assistant in the cloud needs that one.
-def test_coach_address_is_only_given_when_the_server_was_told_it(client_a):
-    app.dependency_overrides[get_settings] = lambda: _settings()
+def test_coach_address_is_only_given_when_the_server_was_told_it(client_a, monkeypatch):
     assert client_a.get(URL).json()["coachUrl"] is None
-    app.dependency_overrides[get_settings] = lambda: _settings(public_url="https://coach.example/")
+    monkeypatch.setattr(get_settings(), "public_url", "https://coach.example")
     assert client_a.get(URL).json()["coachUrl"] == "https://coach.example/mcp"
+
+
+# With the dashboard on a port of its own next to a coach on the standard one
+# (deploy/tailscale), the coach's address is the dashboard's without the port.
+def test_coach_address_follows_the_dashboard_when_only_the_port_differs(client_a, monkeypatch):
+    monkeypatch.setattr(get_settings(), "oauth_authorization_port", 8443)
+    headers = {"Host": "loopback.tailnet.example:8443", "X-Forwarded-Proto": "https"}
+    assert client_a.get(URL, headers=headers).json()["coachUrl"] == "https://loopback.tailnet.example/mcp"

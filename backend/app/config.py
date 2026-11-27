@@ -54,8 +54,19 @@ class Settings(BaseSettings):
     #     not the address the assistant connects to: a server whose coach
     #     endpoint is public while the dashboard, and so the page that takes a
     #     password, stays on a private network.
+    #   OAUTH_AUTHORIZATION_PORT — the same thing for the common case where the
+    #     two differ only in the port: one name, the coach on the standard
+    #     port and the dashboard on this one. It needs no name written down,
+    #     which is why deploy/tailscale/tailscale.yml can set it for everyone.
     public_url: str | None = None
     oauth_authorization_origin: str | None = None
+    oauth_authorization_port: int | None = Field(default=None, ge=1, le=65535)
+
+    @field_validator("oauth_authorization_port", mode="before")
+    @classmethod
+    def _blank_port_is_unset(cls, v: object) -> object:
+        # Compose hands an unset variable through as an empty string.
+        return None if isinstance(v, str) and not v.strip() else v
 
     @field_validator("public_url", "oauth_authorization_origin")
     @classmethod

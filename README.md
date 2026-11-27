@@ -121,9 +121,34 @@ Then `docker compose up -d`. This adds a [Caddy](https://caddyserver.com) contai
 
 `COMPOSE_FILE` replaces Compose's automatic file discovery: if you keep a `docker-compose.override.yml`, add it to the list (`docker-compose.yml:docker-compose.override.yml:deploy/https/caddy.yml`). On Windows the separator is `;`.
 
+### Tailscale (a home server: no domain, no open ports)
+
+[Tailscale](https://tailscale.com) puts the server on a private network of your own devices (a "tailnet"). The add-on below gives the server a Tailscale device of its own, with HTTPS and a name, and nothing to configure on your router. Add one line to `.env`:
+
+```ini
+COMPOSE_FILE=docker-compose.yml:deploy/tailscale/tailscale.yml
+```
+
+Then `docker compose up -d`, and `docker compose logs tailscale`: the log shows a link that adds the server to your tailnet. Open it and approve. (To skip the link, put an [auth key](https://tailscale.com/kb/1085/auth-keys) in `.env` as `TS_AUTHKEY`.) The device is called `loopback`; set `TS_HOSTNAME` for another name.
+
+The server then has two entrances, both at `loopback.<your-tailnet>.ts.net`:
+
+| Address | Who can reach it | What is there |
+|---|---|---|
+| `https://loopback.<your-tailnet>.ts.net:8443` | Devices on your tailnet | Everything: dashboard, API (the phone app), coach |
+| `https://loopback.<your-tailnet>.ts.net/mcp` | The internet | The coach alone, for assistants that connect from the cloud ([claude.ai](#signing-in-from-an-assistant)) |
+
+Install Tailscale on each phone and point the app at the first address.
+
+Only the coach is public, and it answers nothing without a token. What reaches the server from the internet is listed in [`deploy/tailscale/serve.json`](deploy/tailscale/serve.json): `/mcp`, `/oauth/token` and two small documents that tell an assistant where to sign in. Tailscale answers every other path itself with a 404, so the dashboard, the API and every page that takes a password stay on your tailnet. Signing in to approve an assistant happens on the first address, in your own browser.
+
+Two settings in your tailnet make this work, both in the Tailscale admin console and both one-time: [HTTPS certificates](https://tailscale.com/kb/1153/enabling-https) (with MagicDNS), and [Funnel](https://tailscale.com/kb/1223/funnel) allowed for the device, which is what makes the second address public. Without Funnel the first address works all the same and only assistants in the cloud cannot connect.
+
+The add-on also closes plain-HTTP port 8001 to everything but the host itself, and makes the server see each client's real address. If your phones were using `http://<machine-name>:8001`, move them to the first address above. `COMPOSE_FILE` replaces Compose's automatic file discovery: if you keep a `docker-compose.override.yml`, add it to the list.
+
 ### Other ways
 
-- **Tailscale:** install Tailscale on the server and each phone; clients use `http://<machine-name>:8001` inside the tailnet and nothing is exposed to the internet. If the app must also work for people outside your tailnet, [Tailscale Funnel](https://tailscale.com/kb/1223/funnel) can publish the port (e.g. `tailscale funnel --bg --https 8443 8001`). Needs no domain and no open port, so it suits a home server.
+- **Tailscale on the host, without the add-on:** install Tailscale on the server and each phone; clients use `http://<machine-name>:8001` inside the tailnet and nothing is exposed to the internet. `tailscale serve --bg --https 8443 8001` adds HTTPS. An assistant in the cloud cannot connect to such a server; that is what the add-on above is for.
 - **Cloudflare Tunnel:** also works from behind a home router, with a domain on Cloudflare. Be aware that Cloudflare terminates the TLS connection, so it can read the health data passing through; with Caddy or Tailscale it is only ever decrypted on your own machine. [`deploy/demo/docker-compose.public.yml`](deploy/demo/docker-compose.public.yml) shows the pattern.
 - **Your own reverse proxy:** put nginx / Traefik / Caddy with a real certificate in front and forward to `127.0.0.1:8001`. Set `FORWARDED_ALLOW_IPS` in `.env` to the address the proxy connects from, or every client shares one rate limit (see [Configuration](#configuration)).
 - **LAN only:** fine for trying it out, but a phone that leaves the house stops syncing.
@@ -184,6 +209,9 @@ Everything is configured through environment variables in the root `.env` (read 
 | `MCP_ENABLED` | `true` | Serve the coach MCP at `/mcp` on the same port (see [MCP Server](#mcp-server)). `false` removes the endpoint |
 | `PUBLIC_URL` | *(unset)* | The server's address as an assistant reaches it, e.g. `https://loopback.example.com`. Only needed behind a proxy that does not pass the original `Host` header on: the server otherwise reads its address from each request (see [Signing in from an assistant](#signing-in-from-an-assistant)) |
 | `OAUTH_AUTHORIZATION_ORIGIN` | *(unset)* | Where the page that asks you to sign in and approve an assistant lives, when that is not the address the assistant connects to: a coach endpoint that is public next to a dashboard that is not |
+| `OAUTH_AUTHORIZATION_PORT` | *(unset)* | The same, when the two differ only in the port: the coach on the standard port and the dashboard on this one. `deploy/tailscale/tailscale.yml` sets it to 8443 for you |
+| `TS_HOSTNAME` | `loopback` | Name of the server's device on your tailnet, used with `deploy/tailscale/tailscale.yml` (see [Exposing the server](#exposing-the-server)) |
+| `TS_AUTHKEY` | *(unset)* | A Tailscale auth key, to add that device to your tailnet without opening the link from its log |
 | `FORWARDED_ALLOW_IPS` | *(unset)* | Behind a reverse proxy: the address(es) or CIDR the proxy connects from, whose `X-Forwarded-For` the server trusts for the client address (login rate limit, audit trail). Unset, only loopback is trusted and every proxied client looks like the proxy. `deploy/https/caddy.yml` sets this for you. Never use `*` while port 8001 is reachable by anything but the proxy |
 | `DOMAIN` | *(unset)* | Hostname for built-in HTTPS, used with `deploy/https/caddy.yml` (see [Exposing the server](#exposing-the-server)) |
 | `BACKUP_HOST_DIR` | `./backups` | Host directory the server writes its `pg_dump` backups to (and reports freshness from) |
@@ -472,10 +500,10 @@ The connection then shows up as **Coach · Claude** under **Settings → Devices
 
 What this needs:
 
-- **A server Claude can reach.** Claude connects from Anthropic's servers, so the address has to work from the internet, over HTTPS, on the standard port (443). The [built-in HTTPS](#built-in-https-a-server-with-a-public-ip-and-a-domain) setup gives you that. A server that is only on your home network or tailnet cannot be connected this way; use Claude Desktop with the extension for that one.
+- **A server Claude can reach.** Claude connects from Anthropic's servers, so the address has to work from the internet, over HTTPS, on the standard port (443). The [built-in HTTPS](#built-in-https-a-server-with-a-public-ip-and-a-domain) setup gives you that for a server with a domain, and the [Tailscale add-on](#tailscale-a-home-server-no-domain-no-open-ports) for a home server, where it publishes the coach and nothing else. A server that is only on your home network or tailnet cannot be connected this way; use Claude Desktop with the extension for that one.
 - **Nothing to configure.** The server tells Claude where to sign in, and reads its own address from the request Claude makes, which is right behind Tailscale and Caddy. Behind a proxy that replaces the `Host` header, set `PUBLIC_URL` (see [Configuration](#configuration)).
 
-Only the coach has to be public for this, not the dashboard. Everything Anthropic's servers call is `/mcp`, `/oauth/token` and two documents under `/.well-known/`. The pages you sign in and approve on are opened by your own browser only, so they can stay on a private address: set `OAUTH_AUTHORIZATION_ORIGIN` to the address you open the dashboard at, and publish only those paths. No page that takes a password is then on the internet.
+Only the coach has to be public for this, not the dashboard. Everything Anthropic's servers call is `/mcp`, `/oauth/token` and two documents under `/.well-known/`. The pages you sign in and approve on are opened by your own browser only, so they can stay on a private address, and no page that takes a password is then on the internet. The Tailscale add-on is set up this way. To do the same behind a proxy of your own, publish only those paths and tell the server where the dashboard is: `OAUTH_AUTHORIZATION_PORT` if it is the same name on another port, `OAUTH_AUTHORIZATION_ORIGIN` if it is another name.
 
 Other assistants that sign in the same way work too, as long as they identify themselves with a published client document (the newer of the two ways an MCP client can introduce itself; Claude and Claude Code do). An assistant Loopback does not know is shown by its web address on the approval page, with a warning. Assistants that expect to register themselves with the server first are not supported yet.
 

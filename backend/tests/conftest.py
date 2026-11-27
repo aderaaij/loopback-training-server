@@ -77,6 +77,7 @@ def wire(engine, session_factory, monkeypatch):
     # must not change what the tests see.
     monkeypatch.setattr(get_settings(), "public_url", None)
     monkeypatch.setattr(get_settings(), "oauth_authorization_origin", None)
+    monkeypatch.setattr(get_settings(), "oauth_authorization_port", None)
 
     with engine.begin() as c:
         for table in reversed(Base.metadata.sorted_tables):

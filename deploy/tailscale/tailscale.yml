@@ -1,0 +1,66 @@
+# Tailscale, with only the coach on the internet — layered on top of
+# docker-compose.yml.
+#
+# For a home server: no domain, no open ports, no certificate to look after.
+# It adds a Tailscale node of the server's own, which gives it a name of its
+# own (<TS_HOSTNAME>.<your-tailnet>.ts.net) and two entrances:
+#
+#   https://<name>:8443   dashboard, API and coach, for devices on your tailnet
+#   https://<name>/mcp    the coach alone, reachable from the internet, for
+#                         assistants that connect from the cloud (claude.ai)
+#
+# Enable it from the root .env:
+#
+#   COMPOSE_FILE=docker-compose.yml:deploy/tailscale/tailscale.yml
+#
+# then `docker compose up -d`, and `docker compose logs tailscale` for the
+# link that adds the node to your tailnet (or set TS_AUTHKEY and skip the
+# link). See README "Exposing the server".
+#
+# What reaches the server from the internet is listed in serve.json, next to
+# this file: /mcp, /oauth/token and two documents under /.well-known.
+# Tailscale answers every other path itself with a 404, so no page that takes
+# a password is public. The pages an assistant sends you to, to sign in and
+# approve it, are on the tailnet entrance.
+
+services:
+  app:
+    # Plain HTTP stays on the host's loopback only. Everything else arrives
+    # through the Tailscale node, which is what the setting below relies on.
+    ports: !override
+      - "127.0.0.1:${API_PORT:-8001}:8001"
+    environment:
+      # Take the client address from X-Forwarded-For, so the login rate limit
+      # and the audit trail see each client instead of the node's address.
+      # "*" trusts the header from any peer, which is sound ONLY because of
+      # the loopback-only port above: the peers left are the Tailscale node
+      # (which sets the header from the real connection and discards any a
+      # client sent) and processes on this host. Keep the two together.
+      - FORWARDED_ALLOW_IPS=*
+      # The sign-in and approval pages are on the tailnet entrance: same
+      # name, this port. It has to match the tailnet port in serve.json.
+      - OAUTH_AUTHORIZATION_PORT=8443
+
+  tailscale:
+    image: tailscale/tailscale:stable
+    container_name: tailscale__training-api
+    hostname: ${TS_HOSTNAME:-loopback}
+    environment:
+      - TS_HOSTNAME=${TS_HOSTNAME:-loopback}
+      # Optional. Without it the node prints a link in its log that signs it
+      # in; with it (Tailscale admin console → Settings → Keys) it joins by
+      # itself. Passes through only when set in the root .env.
+      - TS_AUTHKEY
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_SERVE_CONFIG=/config/serve.json
+    volumes:
+      # The node's identity. Losing this volume means signing it in again,
+      # and a second device by the same name in the admin console.
+      - tailscale_state:/var/lib/tailscale
+      - ./deploy/tailscale/serve.json:/config/serve.json:ro
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  tailscale_state:
