@@ -84,7 +84,13 @@ def build_calendar(db: DbSession, user_id: uuid.UUID | None, date_from: date, da
     plan_names = {p.id: p.name for p in active_plans}
     missing_plan_ids = {r.plan_id for r in run_rows if r.plan_id and r.plan_id not in plan_names}
     if missing_plan_ids:
-        for p in db.scalars(select(Plan).where(Plan.id.in_(missing_plan_ids))):
+        # Scoped like every other query here. The queue routes refuse a run
+        # on someone else's plan, and this keeps such a row, should one exist
+        # from before they did, from giving that plan's name away.
+        names_q = select(Plan).where(Plan.id.in_(missing_plan_ids))
+        if user_id is not None:
+            names_q = names_q.where(Plan.user_id == user_id)
+        for p in db.scalars(names_q):
             plan_names[p.id] = p.name
 
     entries: list[dict] = []
