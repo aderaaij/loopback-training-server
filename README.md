@@ -38,7 +38,7 @@ Built with FastAPI, PostgreSQL, SQLAlchemy, and React. Includes a built-in MCP (
 - **Multi-user** — Username/password accounts with per-device API tokens (`POST /api/auth/login`); all data is scoped per user
 - **Web dashboard** — Authenticated React SPA served same-origin by the API: overview, calendar, workouts, plans, health charts, and queue for athletes; user management and system monitoring for admins
 - **Admin & monitoring** — Per-user token inspection/revoke (cut off one stolen device), sync-freshness per athlete, an auth audit trail (logins, password/token/user changes), and a system screen reporting DB size and backup freshness
-- **MCP server** — Built in at `/mcp`: let AI assistants query your training data, create workouts and plans, and correlate health metrics via natural language. Claude on the web and phone connects by signing in (paste the address, approve in the dashboard); other clients use a token or the Claude Desktop extension
+- **MCP server** — Built in at `/mcp`: let AI assistants query your training data, create workouts and plans, and correlate health metrics via natural language. Claude on the web and phone connects by signing in with OAuth (paste the address, approve in the dashboard); other clients use a token or the Claude Desktop extension
 
 ## Quick Start
 
@@ -399,11 +399,21 @@ The server ships with an [MCP](https://modelcontextprotocol.io) endpoint that ex
 http://<machine-name>:8001/mcp
 ```
 
-Each person connects as **themselves**, so the data is scoped to their account — this is the "point your own Claude (or any LLM) at it" path. There are two ways to do that. An assistant that can be given a header sends the person's own token as `Authorization: Bearer` (mint one in the dashboard: **Settings → New token**). An assistant that cannot, such as claude.ai, [signs in](#signing-in-from-an-assistant): you approve it in the dashboard and it is given a token of its own. A request without a valid token gets a 401. Set `MCP_ENABLED=false` in `.env` to serve no coach endpoint at all.
+Each person connects as **themselves**, so the data is scoped to their account — this is the "point your own Claude (or any LLM) at it" path. There are two ways to do that. An assistant that can be given a header sends the person's own token as `Authorization: Bearer` (mint one in the dashboard: **Settings → New token**). An assistant that cannot, such as claude.ai, [signs in with OAuth](#signing-in-from-an-assistant): you approve it in the dashboard and it is given a token of its own. A request without a valid token gets a 401. Set `MCP_ENABLED=false` in `.env` to serve no coach endpoint at all.
 
 ### Connect a client
 
 The quickest way: in the dashboard, **Settings → AI coach → Connect** shows the setup for your client: an extension to install for Claude Desktop, the address to paste for Claude on the web and phone, and for the others a snippet with the server address and a new token already filled in. The sections below are the same thing by hand; substitute your server's address and your token.
+
+Which way applies to you:
+
+| Assistant | How it connects | What your server needs |
+|---|---|---|
+| **Claude on the web** (claude.ai) and the **Claude phone apps** | [Signs in with OAuth](#signing-in-from-an-assistant): paste the address, approve in the dashboard. No token to create | To be reachable from the internet over HTTPS: [built-in HTTPS](#built-in-https-a-server-with-a-public-ip-and-a-domain) on a server with a domain, or the [Tailscale add-on](#tailscale-a-home-server-no-domain-no-open-ports) on a home server |
+| **Claude Desktop** | The Loopback extension and a token (below). Its Connectors screen works like the web instead | To be reachable from your computer; a home network or tailnet is enough |
+| **Claude Code, Cursor, VS Code** and other clients on your computer | The address and a token in a header (below) | To be reachable from your computer |
+
+OAuth sign-in is new in 0.1.30. It is for assistants that run in the cloud and cannot be handed a token; everything that worked with a token before still does, unchanged.
 
 **Claude Code**
 
@@ -487,9 +497,9 @@ Why the config looks like this: the token goes in `env` and is referenced as `${
 
 </details>
 
-<a id="signing-in-from-an-assistant"></a>**Claude on the web and phone** (signing in)
+<a id="signing-in-from-an-assistant"></a>**Claude on the web and phone** (signing in with OAuth)
 
-claude.ai and the Claude phone apps cannot be given a token. They sign in instead: you paste the server's address, approve the connection in the Loopback dashboard, and Claude is handed a token of its own.
+claude.ai and the Claude phone apps cannot be given a token. They sign in instead, with OAuth: you paste the server's address, approve the connection in the Loopback dashboard, and Claude is handed a token of its own.
 
 1. In Claude, open **Settings → Connectors** and choose **Add custom connector**.
 2. Paste your server's address followed by `/mcp` (the dashboard shows it under **Settings → AI coach → Connect → Claude (web & phone)**) and add it.
@@ -505,7 +515,7 @@ What this needs:
 
 Only the coach has to be public for this, not the dashboard. Everything Anthropic's servers call is `/mcp`, `/oauth/token` and two documents under `/.well-known/`. The pages you sign in and approve on are opened by your own browser only, so they can stay on a private address, and no page that takes a password is then on the internet. The Tailscale add-on is set up this way. To do the same behind a proxy of your own, publish only those paths and tell the server where the dashboard is: `OAUTH_AUTHORIZATION_PORT` if it is the same name on another port, `OAUTH_AUTHORIZATION_ORIGIN` if it is another name.
 
-Other assistants that sign in the same way work too, as long as they identify themselves with a published client document (the newer of the two ways an MCP client can introduce itself; Claude and Claude Code do). An assistant Loopback does not know is shown by its web address on the approval page, with a warning. Assistants that expect to register themselves with the server first are not supported yet.
+This has been used with claude.ai. Other assistants that sign in with OAuth can connect the same way, as long as they identify themselves with a published client document (the newer of the two ways an MCP client can introduce itself; Claude Code does too, though signing in from it has not been tried here). An assistant Loopback does not know is shown by its web address on the approval page, with a warning. Assistants that expect to register themselves with the server first are not supported yet, and neither are ones that want the answer sent to an address scheme of their own instead of https.
 
 **Cursor** (`~/.cursor/mcp.json`)
 
