@@ -10,6 +10,48 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [0.1.29] — 2026-11-27
+
+### Added
+
+- **A Claude Desktop extension for the coach.** Connecting Claude Desktop
+  meant installing Node.js, editing a config file by hand and quitting the
+  app. The dashboard's **Settings → AI coach → Connect** now offers an
+  extension for it instead: download `loopback-coach.mcpb`, open it and paste
+  the token. Claude Desktop runs it with the Node.js it ships and keeps the
+  token in the system keychain.
+  - The server address is filled in by the download. The token never is, so
+    the file can be passed on to someone else in the household, who pastes
+    their own.
+  - When the server restarts while Claude Desktop is open (an upgrade, a
+    reboot), the extension opens a new session by itself.
+  - `GET /api/coach/claude-desktop.mcpb` returns the extension. It needs a
+    token like the rest of the API, takes an optional `serverUrl` to fill in
+    the address, and answers 404 when `MCP_ENABLED=false`.
+  - The by-hand setup with `mcp-remote` still works and is in the README.
+
+### Fixed
+
+- **`/.well-known/*` answered with the dashboard's HTML and a 200.** An MCP
+  client that looked there for OAuth metadata after the 401 from `/mcp`, as
+  Claude's "Add custom connector" does, got HTML where it expected a metadata
+  document. Those paths are now a JSON 404, unless a real file exists in the
+  build.
+
+### Notes
+
+- No migration, and nothing changes on the wire for the iOS app.
+- The extension was tested in Claude Desktop on macOS. Windows is untested;
+  the by-hand setup is the fallback there.
+- Claude Desktop warns that an extension can access the computer and lists
+  the developer as unknown. It shows both for an extension that is installed
+  from a file and is not signed. This one reads no files: it passes messages
+  between Claude Desktop and the server.
+- An installed extension does not update itself. A later fix to it reaches
+  people who download it again.
+- If the server cannot be reached when Claude Desktop starts, the extension
+  fails until Claude Desktop is restarted.
+
 ## [0.1.28] — 2026-11-25
 
 ### Added

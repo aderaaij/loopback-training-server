@@ -301,7 +301,7 @@ The MCP server (`mcp/`) exposes training data to Claude via FastMCP. It talks to
   - The door checks only that a bearer token is *present* (401 otherwise); the API verifies
     it on every call. A bogus token can therefore open a session and list tool schemas
     (the consent lookup fails open to "advertise all"), but every data call fails.
-- **Claude Desktop extension (`.mcpb`), unreleased after 0.1.28.** Claude Desktop cannot
+- **Claude Desktop extension (`.mcpb`), since 0.1.29.** Claude Desktop cannot
   send a bearer token to a remote server, and its connector dialog calls from Anthropic's
   servers, which cannot reach a tailnet. `GET /api/coach/claude-desktop.mcpb`
   (`routes/coach.py`, builder in `app/coach_extension.py`) zips `app/desktop_extension/`
