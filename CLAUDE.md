@@ -256,6 +256,11 @@ Models live in `backend/app/models/`. Key tables:
   it would have looked like the deploy had changed nothing. Both spellings of the
   consent path are registered for that reason; a new client-facing route should do
   the same, or the client must be sure it never appends a slash.
+- **`/.well-known/*` is a JSON 404, not the dashboard** (unless a real file exists in the
+  build). The same catch-all used to answer it with `index.html` and a 200, which an MCP
+  client looking for OAuth metadata after the 401 from `/mcp` reads as a broken metadata
+  document instead of "no OAuth here" (`backend/tests/test_spa_fallback.py`). When OAuth
+  is added, its discovery routes have to be registered ahead of the catch-all.
 - Not built yet: `DELETE /api/me/data/{domain}` (per-domain deletion at the moment
   consent is withdrawn — the app currently promises only that syncing stops).
 

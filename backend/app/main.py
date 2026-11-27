@@ -131,4 +131,10 @@ def spa(full_path: str):
     candidate = (SPA_DIST / full_path).resolve()
     if candidate.is_file() and candidate.is_relative_to(SPA_DIST):
         return FileResponse(candidate)
+    # /.well-known/* is read by programs, not people. An MCP client that got
+    # the 401 from /mcp looks here for OAuth metadata; the dashboard's HTML
+    # with a 200 reads as a broken metadata document, where a 404 says "this
+    # server has no OAuth" and the client reports that instead.
+    if full_path.startswith(".well-known/"):
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
     return FileResponse(SPA_INDEX)
