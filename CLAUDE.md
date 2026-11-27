@@ -256,6 +256,11 @@ Models live in `backend/app/models/`. Key tables:
   it would have looked like the deploy had changed nothing. Both spellings of the
   consent path are registered for that reason; a new client-facing route should do
   the same, or the client must be sure it never appends a slash.
+- **`/.well-known/*` is a JSON 404, not the dashboard** (unless a real file exists in the
+  build). The same catch-all used to answer it with `index.html` and a 200, which an MCP
+  client looking for OAuth metadata after the 401 from `/mcp` reads as a broken metadata
+  document instead of "no OAuth here" (`backend/tests/test_spa_fallback.py`). When OAuth
+  is added, its discovery routes have to be registered ahead of the catch-all.
 - Not built yet: `DELETE /api/me/data/{domain}` (per-domain deletion at the moment
   consent is withdrawn — the app currently promises only that syncing stops).
 
@@ -296,6 +301,75 @@ The MCP server (`mcp/`) exposes training data to Claude via FastMCP. It talks to
   - The door checks only that a bearer token is *present* (401 otherwise); the API verifies
     it on every call. A bogus token can therefore open a session and list tool schemas
     (the consent lookup fails open to "advertise all"), but every data call fails.
+- **Claude Desktop extension (`.mcpb`), unreleased after 0.1.28.** Claude Desktop cannot
+  send a bearer token to a remote server, and its connector dialog calls from Anthropic's
+  servers, which cannot reach a tailnet. `GET /api/coach/claude-desktop.mcpb`
+  (`routes/coach.py`, builder in `app/coach_extension.py`) zips `app/desktop_extension/`
+  into an extension Claude Desktop installs with the Node it ships; the dashboard's Connect
+  modal offers it instead of the old `mcp-remote` config (still in the README, collapsed).
+  Things worth not re-deriving:
+  - **The relay (`desktop_extension/server/relay.js`, started by `index.js`) has no
+    dependencies on purpose**, so
+    the bundle is zipped from the files as they are: no npm install, no node_modules, no
+    build step in the image. It is a stdio-to-streamable-HTTP bridge for exactly what `/mcp`
+    uses (POST, JSON or SSE answers); it opens no listening GET stream because no tool makes
+    server-initiated requests. A tool that starts using sampling or elicitation outside a
+    request's own answer stream needs that added.
+  - **Built per request, not at image build**, so the server address can be filled in. The
+    address comes from the dashboard (`serverUrl` = `window.location.origin`), because behind
+    Tailscale Serve or a proxy the server only sees its own loopback address. That parameter
+    is why the route is authenticated: a link cannot carry the bearer header, so nobody can
+    hand out a link to this server that downloads a bundle pointing somewhere else.
+  - **The token is never in the file.** It sits in a downloads folder and gets passed on in
+    a household; with a token inside, whoever installs it acts as that athlete.
+  - **The server forgets its MCP sessions on restart and answers 404 for the old id**
+    (measured against fastmcp 3.1.1). Claude Desktop cannot be told to start over, so the
+    relay re-sends the client's own `initialize` and repeats the request. Without that every
+    upgrade breaks the coach until Claude Desktop is restarted.
+  - **Each stdio message is its own HTTP request, so order is not preserved for free.** The
+    relay holds a request until the notifications written before it are delivered, so a
+    `tools/list` cannot overtake the `notifications/initialized` written just ahead of it.
+    This is a precaution: the protocol lets a server refuse such a request, but this one
+    answers it anyway (checked against fastmcp 3.1.1).
+  - **A 202 for a notification is labelled `application/json` and has an empty body**, which
+    must not reach the JSON parser.
+  - A wrong token still opens a session (the door only checks that one is present, see
+    above); the athlete finds out from the first tool call, whose error the coach can read
+    out. An unreachable server fails `initialize`, and the reason goes to the extension's
+    log.
+  - Tests: `backend/tests/desktop_extension/relay.test.js` (Node's own runner, a stand-in
+    HTTP server, its own CI job) and `backend/tests/test_coach_extension.py` (what goes in
+    the zip). The manifest is `manifest_version` 0.3 and validates against the published
+    schema (`schemas/mcpb-manifest-v0.3.schema.json` in `modelcontextprotocol/mcpb`).
+  - ⚠️ **Claude Desktop does not run the extension as `node server/index.js`.** With "Use
+    built-in Node.js for MCP" on (the default) it starts its own host script in a helper
+    process (`mcp-runtime/nodeHost.js` in its `app.asar`, read in 6.28899), which loads the
+    entry point with `import()`. So `require.main === module` is **false** in the entry
+    point: the first version guarded its start with that, never started, and Claude Desktop
+    timed out on `initialize` with nothing in the log and no request reaching the server.
+    That is why `index.js` only calls `main()` and the logic sits in `relay.js`, which the
+    tests can load without starting anything. The same host gives the extension no real
+    stdin: it swaps `on`, `once`, `resume` and a few more methods of `process.stdin` for
+    those of a stream it feeds, so stdin is read with plain `'data'` events (what the MCP
+    SDK does) and not through `readline`. It also exits on SIGTERM itself, so the relay's
+    session `DELETE` does not run there; the server forgets the session when it restarts.
+    `backend/tests/desktop_extension/claude_host.js` is a stand-in for that host, and the
+    suite runs the relay under it as well as a plain program. Before the real connection
+    Claude Desktop starts a second copy and asks it `server/discover` with four seconds to
+    answer; the coach endpoint refuses that (400, no session) and the relay passes the
+    refusal on as an error, which reads as "older protocol" and is what should happen.
+  - **Installed and working in Claude Desktop 6.28899 on macOS (2026-11-27)**, against a
+    local server and, by the user's report, over the tailnet. Windows is untested.
+  - **Claude Desktop shows an "access your computer" warning and "Unknown developer"** for
+    it, as for any extension it records as `source: local` and `unsigned`
+    (`extensions-installations.json`; Anthropic's own directory extensions are unsigned
+    too, with `source: registry`). The manifest's author is read correctly and is not what
+    the label shows. A signature only counts with a certificate the OS trusts for code
+    signing (`security verify-cert -p codeSign` on macOS), and covers the whole file, so it
+    would mean a paid certificate and one fixed bundle per release without the filled-in
+    address. Not done; the Connect dialog and the README say what to expect instead.
+  - To see what Claude Desktop did: `~/Library/Logs/Claude/mcp-server-Loopback Coach.log`
+    and `main.log` on macOS, next to whether a `POST /mcp` reached the server at all.
 - Standalone mode remains (`cd mcp && uv run start`): stdio by default, `MCP_TRANSPORT=http`
   for its own port (8590). Env: `mcp/config/.env` (`TRAINING_API_URL`, `TRAINING_API_KEY`).
 - **Coaching playbook:** `get_coaching_playbook(goal?, experience?)` serves the running-coach

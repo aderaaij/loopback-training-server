@@ -1,8 +1,9 @@
-import { Brain, Check, Copy, Desktop, DeviceMobile, Key, Plus, SignOut } from '@phosphor-icons/react'
+import { Brain, Check, Copy, Desktop, DeviceMobile, DownloadSimple, Key, Plus, SignOut } from '@phosphor-icons/react'
 import type { Icon } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { usePageHeader } from '../components/PageHeader'
 import { ConfirmDialog, ErrorNote, Loading, Modal, SectionLabel } from '../components/ui'
+import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { clientLabel, fmtDayYear, relTime } from '../lib/format'
 import { COACH_CLIENTS, buildCoachSetup, coachUrl } from '../lib/coachSetup'
@@ -301,6 +302,41 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   )
 }
 
+/**
+ * The Claude Desktop extension, made by the server with this dashboard's
+ * address filled in. Fetched rather than linked: the endpoint wants the
+ * bearer token, which a plain link cannot send.
+ */
+function DownloadExtensionButton() {
+  const [state, setState] = useState<'idle' | 'busy' | 'failed'>('idle')
+
+  async function download() {
+    setState('busy')
+    try {
+      const blob = await api.blob('/api/coach/claude-desktop.mcpb', { serverUrl: window.location.origin })
+      const href = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = href
+      link.download = 'loopback-coach.mcpb'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      // Not at once: the browser reads the blob after the click returns.
+      setTimeout(() => URL.revokeObjectURL(href), 10_000)
+      setState('idle')
+    } catch {
+      setState('failed')
+    }
+  }
+
+  return (
+    <button className="btn-accent" style={{ flex: 1 }} disabled={state === 'busy'} onClick={() => void download()}>
+      <DownloadSimple size={15} />
+      {state === 'busy' ? 'Preparing…' : state === 'failed' ? 'Try again' : 'Download'}
+    </button>
+  )
+}
+
 function ConnectCoachModal({ onClose }: { onClose: () => void }) {
   const mint = useMintToken()
   const [client, setClient] = useState<CoachClientId>('claude-desktop')
@@ -345,9 +381,13 @@ function ConnectCoachModal({ onClose }: { onClose: () => void }) {
               <li key={step}>{step}</li>
             ))}
           </ol>
-          <div className="cli-box connect-snippet">{setup.snippet}</div>
+          {setup.note && <p className="connect-note">{setup.note}</p>}
+          {setup.snippet != null && <div className="cli-box connect-snippet">{setup.snippet}</div>}
           {!setup.snippetHasToken && (
-            <div className="cli-box connect-snippet" style={{ marginTop: 10, wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
+            <div
+              className="cli-box connect-snippet"
+              style={{ marginTop: setup.snippet != null ? 10 : 0, wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}
+            >
               {token}
             </div>
           )}
@@ -361,13 +401,16 @@ function ConnectCoachModal({ onClose }: { onClose: () => void }) {
               Done
             </button>
             {!setup.snippetHasToken && <CopyButton key={`${client}-token`} text={token} label="Copy token" />}
-            <CopyButton key={client} text={setup.snippet} label={setup.snippetHasToken ? 'Copy' : 'Copy config'} />
+            {setup.snippet != null && (
+              <CopyButton key={client} text={setup.snippet} label={setup.snippetHasToken ? 'Copy' : 'Copy config'} />
+            )}
+            {setup.extension && <DownloadExtensionButton />}
           </div>
         </>
       ) : (
         <>
           <div style={{ fontSize: 13, color: 'var(--text-3)', lineHeight: 1.55 }}>
-            This creates a token named <strong>Coach · {clientName}</strong> and shows the setup with it filled in.
+            This creates a token named <strong>Coach · {clientName}</strong> and shows the setup for it.
             The coach connects to <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{url}</span>, so the
             app has to be able to reach this address.
           </div>
@@ -479,7 +522,7 @@ export function Settings() {
                 Connect Claude or another assistant
               </div>
               <div className="mono-meta" style={{ marginTop: 3 }}>
-                ready-to-paste setup for Claude Desktop, Claude Code, Cursor and VS Code
+                an extension for Claude Desktop, ready-to-paste setup for Claude Code, Cursor and VS Code
               </div>
             </div>
             <button className="btn-accent" style={{ padding: '9px 16px', fontSize: 13 }} onClick={() => setConnectingCoach(true)}>

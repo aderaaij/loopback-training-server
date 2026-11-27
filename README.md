@@ -229,6 +229,7 @@ All endpoints except `/api/health` and `/api/auth/login` require a `Bearer` toke
 | `POST` | `/api/auth/password` | Change own password (revokes every *other* token) |
 | `POST` | `/api/auth/tokens` | Mint a named token (shown once; optional `expiresAt`) |
 | `DELETE` | `/api/auth/tokens/{id}` | Revoke one of your own tokens |
+| `GET` | `/api/coach/claude-desktop.mcpb` | The Claude Desktop extension for the coach, as a file (optional `serverUrl` fills in the server address; never contains a token) |
 
 ### Admin
 
@@ -360,7 +361,7 @@ Each person authenticates with their **own** token in an `Authorization: Bearer`
 
 ### Connect a client
 
-The quickest way: in the dashboard, **Settings → AI coach → Connect** creates a token and shows the setup for your client with the server address and token already filled in. The snippets below are the same thing by hand; substitute your server's address and your token.
+The quickest way: in the dashboard, **Settings → AI coach → Connect** creates a token and shows the setup for your client: an extension to install for Claude Desktop, and for the others a snippet with the server address and token already filled in. The snippets below are the same thing by hand; substitute your server's address and your token.
 
 **Claude Code**
 
@@ -374,7 +375,29 @@ claude mcp add training --scope user --transport http \
 
 **Claude Desktop**
 
-Claude Desktop cannot send a bearer token to a remote server by itself, so a small helper ([`mcp-remote`](https://github.com/geelen/mcp-remote)) does it. Do not use **Settings → Connectors → Add custom connector**: that flow connects from Anthropic's servers and expects OAuth, so it does not work with this server (see [Reachability](#reachability)).
+Claude Desktop cannot send a bearer token to a remote server by itself, so Loopback hands out a small **extension** that does it. Nothing else has to be installed, and no config file is edited.
+
+1. In the Loopback dashboard go to **Settings → AI coach → Connect**, pick **Claude Desktop** and create the token.
+2. Click **Download** and open the file (`loopback-coach.mcpb`). Claude Desktop shows it with an **Install** button. If the file does not open in Claude Desktop, use **Settings → Extensions → Advanced settings → Install Extension…** there and pick it.
+3. Install it. When it asks for settings, the server address is already filled in; paste the token into **Token**. Claude Desktop keeps it in the system keychain.
+
+   Claude Desktop warns that an extension can access your computer, and lists the developer as unknown. That is expected: it shows both for an extension that is installed from a file and is not signed. This one reads no files. It only passes messages between Claude Desktop and your server, and its two small scripts are readable in [`backend/app/desktop_extension/server`](backend/app/desktop_extension/server).
+4. Ask in a new chat: *"What did I run this week?"*
+
+Do not use **Settings → Connectors → Add custom connector** instead: that flow connects from Anthropic's servers and expects OAuth, so it does not work with this server (see [Reachability](#reachability)).
+
+The extension is one small script that passes messages between Claude Desktop and `/mcp` on your server, run by the Node.js that Claude Desktop ships. If the server restarts while Claude Desktop is open (an upgrade, a reboot), the extension reconnects by itself. The download is the same for everyone on the server: it holds the address but never a token, so it is safe to pass on to someone else in the household, who then pastes their own.
+
+If it does not connect:
+
+- **Claude says the token was rejected:** it was mistyped or revoked. Create a new one (step 1) and paste it under **Settings → Extensions → Loopback Coach** in Claude Desktop.
+- **The extension shows an error or its tools are missing:** this computer cannot reach the server. Open the dashboard address in a browser on the same computer to confirm; on a tailnet, check that Tailscale is on. The extension writes the exact reason to its log in Claude Desktop. Once the address is reachable again, restart Claude Desktop.
+- **The address changed:** edit it in the extension's settings; the dashboard address is enough, `/mcp` is added for you.
+
+<details>
+<summary>By hand, without the extension (<code>mcp-remote</code>)</summary>
+
+The same connection through a config file and [`mcp-remote`](https://github.com/geelen/mcp-remote), for a Claude Desktop where extensions are switched off.
 
 1. **Install [Node.js](https://nodejs.org)** (20.18 or newer) if you don't have it. The helper runs through `npx`, which comes with Node.
 2. **Create a token.** In the Loopback dashboard go to **Settings → New token**, name it (e.g. "Claude Desktop") and copy it. It is shown only once.
@@ -419,6 +442,8 @@ If it does not connect:
 - **Timeouts:** this computer cannot reach the server. Open the dashboard address in a browser on the same computer to confirm.
 
 Why the config looks like this: the token goes in `env` and is referenced as `${AUTH_HEADER}` because Claude Desktop on Windows mishandles spaces inside `args` values (on macOS a plain `"Authorization: Bearer <your-token>"` argument also works). `--allow-http` is needed because `mcp-remote` refuses plain HTTP to anything but localhost; that is acceptable inside a tailnet, where traffic is already encrypted by WireGuard, and not on the open internet.
+
+</details>
 
 **Cursor** (`~/.cursor/mcp.json`)
 
@@ -504,6 +529,9 @@ make create_migration m="add new column"
 
 # Backend tests (inside the container)
 docker compose exec app python -m pytest
+
+# The Claude Desktop extension's relay script (Node 18+, no install)
+node --test backend/tests/desktop_extension/relay.test.js
 ```
 
 ### Cutting a release (maintainers)
@@ -535,6 +563,8 @@ docker compose exec app python -m pytest
 │   │   ├── auth.py             # Bearer token auth
 │   │   ├── auth_events.py      # Audit trail recording helper
 │   │   ├── cli.py              # User/token admin CLI
+│   │   ├── coach_extension.py  # Builds the Claude Desktop extension (.mcpb) on request
+│   │   ├── desktop_extension/  # Its contents: manifest + the stdio-to-/mcp relay (server/relay.js)
 │   │   ├── database.py         # SQLAlchemy setup
 │   │   ├── models/             # ORM models
 │   │   ├── routes/             # API endpoints
