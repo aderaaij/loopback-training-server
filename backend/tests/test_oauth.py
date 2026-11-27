@@ -25,6 +25,7 @@ from app.models.api_token import ApiToken
 from app.models.auth_event import AuthEvent
 from app.models.oauth import OAuthAuthorization
 from app.models.user import User
+from app.security import hash_token
 
 CLAUDE = "https://claude.ai/oauth/mcp-oauth-client-metadata"
 CLAUDE_CALLBACK = "https://claude.ai/api/mcp/auth_callback"
@@ -256,7 +257,7 @@ def test_no_coach_endpoint_means_no_oauth(anon, monkeypatch):
 # ── the whole way through ──
 
 
-def test_connecting_ends_in_an_ordinary_token(anon, client_a, user_a, session_factory):
+def test_connecting_ends_in_a_coach_token(anon, client_a, user_a, session_factory):
     request_id = start(anon)
 
     shown = client_a.get(f"/api/oauth/requests/{request_id}").json()
@@ -278,16 +279,19 @@ def test_connecting_ends_in_an_ordinary_token(anon, client_a, user_a, session_fa
     assert "refresh_token" not in body and "expires_in" not in body
     assert r.headers["cache-control"] == "no-store"
 
-    me = TestClient(app).get("/api/auth/me", headers={"Authorization": f"Bearer {body['access_token']}"})
-    assert me.status_code == 200
-    assert me.json()["user"]["username"] == "alice"
-    assert "Coach · Claude" in [t["name"] for t in me.json()["tokens"]]
+    # It is alice's, listed with her other tokens, and of the kind that can
+    # do the coach's work and nothing else (tests/test_token_scope.py).
+    assistant = TestClient(app, headers={"Authorization": f"Bearer {body['access_token']}"})
+    assert assistant.get("/api/workouts").status_code == 200
+    assert assistant.get("/api/auth/me").status_code == 403
+    kinds = {t["name"]: t["scope"] for t in client_a.get("/api/auth/me").json()["tokens"]}
+    assert kinds["Coach · Claude"] == "coach"
 
     with session_factory() as db:
         assert db.scalars(select(OAuthAuthorization)).all() == []
         event = db.scalar(select(AuthEvent).where(AuthEvent.event == "token_created"))
         assert event.user_id == user_a[0]
-        assert event.detail == {"name": "Coach · Claude", "via": "oauth"}
+        assert event.detail == {"name": "Coach · Claude", "via": "oauth", "scope": "coach"}
 
 
 def test_a_code_works_once(anon, client_a):
@@ -387,11 +391,12 @@ def test_a_request_is_answered_once(anon, client_a, client_b):
     assert client_a.post(f"/api/oauth/requests/{request_id}/deny").status_code == 404
 
 
-def test_the_token_belongs_to_whoever_approved(anon, client_b):
+def test_the_token_belongs_to_whoever_approved(anon, client_b, user_b, session_factory):
     code = approve(client_b, start(anon))["code"]
     token = trade(anon, code).json()["access_token"]
-    me = TestClient(app).get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
-    assert me.json()["user"]["username"] == "bob"
+    with session_factory() as db:
+        row = db.scalar(select(ApiToken).where(ApiToken.token_hash == hash_token(token)))
+        assert row.user_id == user_b[0]
 
 
 def test_declining_tells_the_assistant_and_leaves_nothing_behind(anon, client_a, session_factory):
@@ -459,8 +464,7 @@ def test_chatgpt_can_sign_in(anon, client_a):
     assert back["_base"] == CHATGPT_CALLBACK
     r = trade(anon, back["code"], client_id=CHATGPT, redirect_uri=CHATGPT_CALLBACK)
     assert r.status_code == 200, r.text
-    me = TestClient(app).get("/api/auth/me", headers={"Authorization": f"Bearer {r.json()['access_token']}"})
-    assert "Coach · ChatGPT" in [t["name"] for t in me.json()["tokens"]]
+    assert "Coach · ChatGPT" in [t["name"] for t in client_a.get("/api/auth/me").json()["tokens"]]
 
 
 # A signature such a client sends along is not looked at, and changes nothing
@@ -512,9 +516,8 @@ def test_a_stranger_calling_itself_claude_is_shown_by_its_host(anon, client_a):
 
     code = approve(client_a, request_id)["code"]
     r = trade(anon, code, client_id=STRANGER, redirect_uri="https://assistant.example/callback")
-    token = r.json()["access_token"]
-    me = TestClient(app).get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
-    names = [t["name"] for t in me.json()["tokens"]]
+    assert r.status_code == 200, r.text
+    names = [t["name"] for t in client_a.get("/api/auth/me").json()["tokens"]]
     assert "Coach · assistant.example" in names
     assert "Coach · Claude" not in names
 

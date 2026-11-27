@@ -231,9 +231,12 @@ Models live in `backend/app/models/`. Key tables:
 - **The trigger is the `X-Consent-Scope` header**, sent by the MCP client on
   *every* request centrally (`api_client._headers`) so a tool added later is
   filtered without anyone opting it in. No header = the athlete themself asking
-  (dashboard, iOS app) = never filtered. **This is a disclosure boundary, not
-  access control**: the same token can call the REST API directly and get
-  everything. Enforcing it server-side would need a `coach` scope on tokens.
+  (dashboard, iOS app) = never filtered. **For a coach token (since 0.1.33,
+  see "Coach tokens" under MCP Server) this is enforced**: such a token is
+  consent-scoped on every request, header or not. For a *full* token it is
+  still only a disclosure boundary: one pasted into an assistant (every coach
+  token from before 0.1.33) can call the REST API directly, without the
+  header, and get everything.
 - ⚠️ **`GET /api/nutrition/summary` spans four domains despite its name** —
   `body` is weight, `expenditure` is active/basal energy, `training` is workouts.
   Gating it on `nutrition` alone discloses the other two, and `protein_g_per_kg`
@@ -380,12 +383,13 @@ The MCP server (`mcp/`) exposes training data to Claude via FastMCP. It talks to
   `routes/oauth.py`, the approval page in `frontend/src/screens/OAuthConsent.tsx`, one table
   (`oauth_authorizations`, a row per sign-in run, deleted when its code is used). Things
   worth not re-deriving:
-  - **The token it ends in is an ordinary `api_tokens` row** named `Coach · <client>`,
-    listed and revoked under Settings like any other. No expiry and no refresh tokens, on
-    purpose: that is what every other coach token is, and a refresh that fails disconnects
-    the coach for a reason the athlete cannot see. It also means such a token can call the
-    whole REST API, not just `/mcp`, exactly as a pasted one can; a `coach` scope on tokens
-    would be the way to narrow that and does not exist.
+  - **The token it ends in is an `api_tokens` row** named `Coach · <client>`, listed and
+    revoked under Settings like any other. No expiry and no refresh tokens, on purpose:
+    that is what every other coach token is, and a refresh that fails disconnects the
+    coach for a reason the athlete cannot see. Since 0.1.33 it is a *coach token* (next
+    section), good for what the coach's tools call and nothing else. In 0.1.30 to 0.1.32
+    it was a full token that could call the whole REST API, and tokens issued then still
+    are.
   - **The request handling is the MCP SDK's** (`AuthorizationHandler`, `TokenHandler` from
     `mcp.server.auth`, pinned with fastmcp in `backend/pyproject.toml`): parameter
     validation, the redirect comparison and the PKCE check are theirs. `CoachOAuthProvider`
@@ -455,6 +459,56 @@ The MCP server (`mcp/`) exposes training data to Claude via FastMCP. It talks to
     frame the approval page could dress up its Allow button.
   - `fastapi run` wraps long access-log lines, so a `grep` for `/oauth/authorize` in the
     container log finds nothing although the request is there.
+- **Coach tokens (since 0.1.33).** `api_tokens.scope` is `full` or `coach`
+  (`backend/app/token_scope.py`, whose docstring has the reasoning). A coach token is
+  refused with 403 on every route that is not in `COACH_ROUTES`, and is consent-scoped
+  without the `X-Consent-Scope` header. Signing in (OAuth) and the dashboard's Connect
+  dialog make coach tokens; logging in and Settings, New token make full ones;
+  `POST /api/auth/tokens` takes `scope`, `app.cli create-token` takes `--coach`. Things
+  worth not re-deriving:
+  - **The check is in `get_current_user`**, not a dependency on `api_router`: the auth
+    router (`/api/auth/me`, `/tokens`, `/password`) is mounted without that router-level
+    dependency, and those are the routes that matter most. Every authenticated request
+    passes through `get_current_user`, so a route added later is closed to coach tokens
+    until it is listed.
+  - **It compares the matched route's own path** (`request.scope["route"].path`, e.g.
+    `/api/plans/{plan_id}`, which FastAPI's `APIRoute.matches` puts there), with the
+    method. Nothing in that is shaped by the caller. The trailing-slash twins some routes
+    have (`/api/me/data-consent/`) are separate routes and are not listed.
+  - **`COACH_ROUTES` is exactly what `mcp/training_mcp/services/api_client.py` calls**
+    (56 method and path pairs out of 111 that take a token, 2026-11-27).
+    `backend/tests/test_token_scope.py` reads that file's `self._request(…)` and
+    `self._delete(…)` calls, resolves each through the app's router and compares both
+    ways; it also checks that every such call is written so it can be read, and that
+    nothing else in the package uses `httpx`. **A new coach tool that calls a new endpoint
+    needs a line in `COACH_ROUTES`**: without it the tool works with a full token and
+    answers 403 for everyone who signed in, and that test is what says so.
+  - **The same test file walks every route in the app** (those that answer FastAPI's own
+    "Not authenticated" without a token) and requires a 403 for a coach token on each one
+    that is not listed, so the refusal is not checked on a hand-picked few.
+  - **403, never 401.** A 401 at `/mcp` tells an assistant to sign in again, and the SPA
+    wipes its token on one; the token is fine, it is the request that is not for it. The
+    first refusal per token in six hours is recorded as `token_rejected` with reason
+    `scope` (method and route in the detail), shown on the System screen.
+  - **Tokens from before 0.1.33 were left as they are** (`full`), at the user's request
+    on 2026-11-27 ("for now"). The migration does not narrow tokens named `Coach · …`,
+    although sign-in and the Connect dialog are what produce that name, because someone
+    may be using such a token for something else. Narrowing one means revoking it and
+    connecting again.
+  - ⚠️ **An older image on the upgraded database treats coach tokens as full ones**: it
+    does not read the column. Rolling back `IMAGE_TAG` alone widens every coach token
+    until the newer image is back. The migration's own downgrade deletes them for that
+    reason.
+  - The backend's environment holds a *built copy* of `training_mcp`, which on a
+    developer's machine can be older than `mcp/` (it lacked the shoe, fuel and setback
+    calls on 2026-11-27 and the comparison failed for that reason alone). The test reads
+    the file in the checkout (`/mcp` in the image) and only falls back to the installed
+    one.
+  - Checked on 2026-11-27 on a stack upgraded from the released 0.1.32 image with tokens
+    already in it: those stayed full and kept working everywhere, a new sign-in and a new
+    Connect token were coach tokens, all 59 tools called through `/mcp` with a coach
+    token were answered (none refused), and each of the 56 listed routes was let through.
+    Not yet done from claude.ai or ChatGPT themselves.
 - Standalone mode remains (`cd mcp && uv run start`): stdio by default, `MCP_TRANSPORT=http`
   for its own port (8590). Env: `mcp/config/.env` (`TRAINING_API_URL`, `TRAINING_API_KEY`).
 - **Coaching playbook:** `get_coaching_playbook(goal?, experience?)` serves the running-coach

@@ -77,7 +77,7 @@ One instance serves a household: a handful of accounts, all data scoped per user
 1. As `admin`, open **Users** and create an account for each athlete (role `user`).
 2. Each athlete signs into the **dashboard** with their username + password.
 3. In the **[iOS app](https://github.com/aderaaij/loopback-training-app)** ([TestFlight beta](https://testflight.apple.com/join/fV73tucs)), each athlete enters the server URL plus their username + password; the app logs in and stores a per-device token.
-4. Optional AI-coach access: each athlete mints a token in the dashboard (**Settings → New token**) and points their MCP client at `/mcp` on the same address (see [MCP Server](#mcp-server)).
+4. Optional AI-coach access: each athlete connects their own assistant from the dashboard (**Settings → AI coach → Connect**; see [MCP Server](#mcp-server)).
 
 Passwords, per-device tokens (revoke one stolen device without touching the rest), and deactivation are all managed in the dashboard. The same operations exist as a CLI fallback:
 
@@ -244,7 +244,7 @@ npm run build      # production build (also run inside the Docker build)
 
 ## API
 
-All `/api` endpoints except `/api/health` and `/api/auth/login` require a `Bearer` token in the `Authorization` header. Tokens are issued per device by `POST /api/auth/login` (username + password, rate-limited 5/min/IP); `/api/admin/*` additionally requires the `admin` role.
+All `/api` endpoints except `/api/health` and `/api/auth/login` require a `Bearer` token in the `Authorization` header. Tokens are issued per device by `POST /api/auth/login` (username + password, rate-limited 5/min/IP); `/api/admin/*` additionally requires the `admin` role. A token is either *full* (everything its owner can do) or a *coach token*, which gets a 403 on every endpoint the coach's tools do not call ([what that covers](#what-an-assistant-can-do-with-its-token)).
 
 > **Wire casing:** JSON casing varies by resource — auth, admin, feedback, and calendar are camelCase; workouts, queue, plans, and health metrics are snake_case.
 
@@ -255,9 +255,9 @@ All `/api` endpoints except `/api/health` and `/api/auth/login` require a `Beare
 | `GET` | `/api/auth/setup` | Whether first-run setup is open (`{"required": bool}`; unauthenticated) |
 | `POST` | `/api/auth/setup` | Create the first admin account (returns a signed-in session; 409 once an admin exists) |
 | `POST` | `/api/auth/login` | Log in, mint a per-device token (bad credentials → 401) |
-| `GET` | `/api/auth/me` | Current user + their tokens |
+| `GET` | `/api/auth/me` | Current user + their tokens (each with its `scope`: `full` or `coach`) |
 | `POST` | `/api/auth/password` | Change own password (revokes every *other* token) |
-| `POST` | `/api/auth/tokens` | Mint a named token (shown once; optional `expiresAt`) |
+| `POST` | `/api/auth/tokens` | Mint a named token (shown once; optional `expiresAt`; `"scope": "coach"` makes a coach token, the default is `full`) |
 | `DELETE` | `/api/auth/tokens/{id}` | Revoke one of your own tokens |
 | `GET` | `/api/coach/claude-desktop.mcpb` | The Claude Desktop extension for the coach, as a file (optional `serverUrl` fills in the server address; never contains a token) |
 
@@ -268,7 +268,7 @@ Signing in from an assistant (OAuth 2.1 with PKCE; see [MCP Server](#signing-in-
 | `GET` | `/.well-known/oauth-protected-resource` | Which server issues tokens for `/mcp` (also at `…/oauth-protected-resource/mcp`) |
 | `GET` | `/.well-known/oauth-authorization-server` | Where to send the athlete and where to trade the code |
 | `GET` | `/oauth/authorize` | Checks an assistant's request and passes the browser on to the approval page |
-| `POST` | `/oauth/token` | Trades the one-time code for a token (an ordinary API token; no refresh tokens) |
+| `POST` | `/oauth/token` | Trades the one-time code for a token (a coach token; no refresh tokens) |
 | `GET` | `/api/oauth/requests/{id}` | The request waiting for an answer (404 once answered or after 10 minutes) |
 | `POST` | `/api/oauth/requests/{id}/approve` | Approve as yourself; returns where to send the browser (403 for an admin account) |
 | `POST` | `/api/oauth/requests/{id}/deny` | Decline; returns where to send the browser |
@@ -399,7 +399,7 @@ The server ships with an [MCP](https://modelcontextprotocol.io) endpoint that ex
 http://<machine-name>:8001/mcp
 ```
 
-Each person connects as **themselves**, so the data is scoped to their account — this is the "point your own Claude (or any LLM) at it" path. There are two ways to do that. An assistant that can be given a header sends the person's own token as `Authorization: Bearer` (mint one in the dashboard: **Settings → New token**). An assistant that cannot, such as claude.ai, [signs in with OAuth](#signing-in-from-an-assistant): you approve it in the dashboard and it is given a token of its own. A request without a valid token gets a 401. Set `MCP_ENABLED=false` in `.env` to serve no coach endpoint at all.
+Each person connects as **themselves**, so the data is scoped to their account — this is the "point your own Claude (or any LLM) at it" path. There are two ways to do that. An assistant that can be given a header sends a token of that person's as `Authorization: Bearer` (the dashboard's **Connect** dialog makes one). An assistant that cannot, such as claude.ai, [signs in with OAuth](#signing-in-from-an-assistant): you approve it in the dashboard and it is given a token of its own. Either way the assistant holds a *coach token*, which works for the coach and [nothing else](#what-an-assistant-can-do-with-its-token). A request without a valid token gets a 401. Set `MCP_ENABLED=false` in `.env` to serve no coach endpoint at all.
 
 ### Connect a client
 
@@ -454,7 +454,7 @@ If it does not connect:
 The same connection through a config file and [`mcp-remote`](https://github.com/geelen/mcp-remote), for a Claude Desktop where extensions are switched off.
 
 1. **Install [Node.js](https://nodejs.org)** (20.18 or newer) if you don't have it. The helper runs through `npx`, which comes with Node.
-2. **Create a token.** In the Loopback dashboard go to **Settings → New token**, name it (e.g. "Claude Desktop") and copy it. It is shown only once.
+2. **Create a token.** In the Loopback dashboard go to **Settings → AI coach → Connect**, pick **Claude Desktop**, create the token and copy it. It is shown only once. (You do not need the download it also offers.)
 3. **Open the config file.** In Claude Desktop: **Settings → Developer → Edit config**. This opens `claude_desktop_config.json`:
    - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
    - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
@@ -567,6 +567,18 @@ extension, Claude Code, Cursor, VS Code) reach the server directly, at the same
 address as the dashboard. Cloud-hosted connectors — claude.ai's connectors,
 OpenAI's *hosted* MCP tool — call from the provider's servers instead, so they
 need an address that works from the internet, over HTTPS on port 443.
+
+### What an assistant can do with its token
+
+A token an assistant gets by signing in, and one the **Connect** dialog makes, is a **coach token**. The server accepts it for the requests the coach's tools make and answers 403 to everything else. So whoever holds one, whether that is Anthropic's or OpenAI's servers or a config file on a laptop:
+
+- **can** read your workouts, plans and notes and the health data you share with the coach, and create or change plans, watch workouts, notes, shoes, fuelling and illness or injury entries. That includes deleting a recorded workout.
+- **cannot** change your password, create or revoke tokens, change what you share with the coach, approve another assistant, or upload data as if it were your phone.
+- **cannot read what you chose not to share**, also not by calling the API directly. For a coach token the sharing setting in the app is enforced by the server on every request.
+
+It does not expire. If one leaks, or you stop using an assistant, revoke it under **Settings → Devices & tokens**, where coach tokens are marked **Coach only**.
+
+Every other token is a **full** token, which can do everything you can: the ones the dashboard and the phone get when you log in, and the ones you make with **New token** for a script of your own. Tokens from before 0.1.33 are full tokens too, including those an assistant was given; nothing was taken away from them in the upgrade. To swap one for a coach token, revoke it and connect that assistant again.
 
 ### Running the MCP on its own
 

@@ -12,6 +12,7 @@ from app.database import DbSession, SessionLocal
 from app.models.api_token import ApiToken
 from app.models.user import User
 from app.security import hash_token
+from app.token_scope import COACH, coach_may
 
 security = HTTPBearer()
 
@@ -112,6 +113,29 @@ def get_current_user(
             detail={"name": token.name},
         )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User is inactive")
+
+    if token.scope == COACH:
+        # The route's own path (`/api/plans/{plan_id}`), which FastAPI records
+        # when it matches the request; the caller has no say in it.
+        route = getattr(request.scope.get("route"), "path", None)
+        if not coach_may(request.method, route):
+            # A coach token asking for something no coach tool asks for is
+            # either a client of the athlete's own pointed at the wrong token
+            # or someone trying out a token that leaked. Worth one line in the
+            # feed either way; the status is 403, since the token itself is
+            # fine and a 401 would send an assistant off to sign in again.
+            _record_rejection(
+                db, request, reason="scope", key=f"scope:{token.id}",
+                username=user.username, user_id=user.id,
+                detail={"name": token.name, "method": request.method, "path": route or request.url.path[:200]},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This token is for the coach only and cannot be used for this request.",
+            )
+    # For app/data_consent.py: a coach token is consent-scoped whatever
+    # headers the request carries.
+    request.state.token_scope = token.scope
 
     ua = (request.headers.get("user-agent") or "").strip()[:300] or None
     _touch_last_used(token.id, token.last_used_at, now, ua, token.last_user_agent)

@@ -180,6 +180,7 @@ function UserTokensPanel({ user }: { user: AdminUserRow }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="t-name" style={{ fontSize: 13 }}>
                 {t.name || 'Unnamed token'}
+                {t.scope === 'coach' && <span className="t-coach">Coach only</span>}
               </div>
               <div className="t-meta" title={t.lastUserAgent ?? undefined}>
                 last used {relTime(t.lastUsedAt)}

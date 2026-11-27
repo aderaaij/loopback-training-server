@@ -124,6 +124,7 @@ export function OAuthConsent() {
             <ul className="consent-list">
               <li>Read your workouts, plans and notes, and the health data you share with your coach in the app</li>
               <li>Create and change plans, workouts for your watch and notes</li>
+              <li>It cannot change your password, your tokens or what you share with your coach</li>
             </ul>
 
             {!data.recognised && (

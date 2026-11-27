@@ -10,6 +10,44 @@ tagged `X.Y.Z` and `X.Y` to GHCR (see README "Releases & upgrading").
 The running server reports its version at `/api/health` and on the admin
 System screen.
 
+## [Unreleased]
+
+### Added
+
+- **Coach tokens: an assistant's token now works for the coach and nothing
+  else.** Until now there was one kind of token. The one Claude or ChatGPT was
+  given when you approved it, or the one the Connect dialog made, could do
+  everything you can, including making more tokens and changing what you share.
+  Tokens handed to an assistant are now *coach tokens*: the server accepts them
+  for the requests the coach's tools make and answers 403 to everything else.
+  With one, nobody can change your password, create or revoke tokens, change
+  what you share, approve another assistant, or upload data as if they were
+  your phone. It can still do everything the coach can, which includes
+  rewriting a plan and deleting a workout.
+  - **What you share with the coach is now enforced for these tokens.** The
+    sharing setting in the app used to shape what the coach was handed, while a
+    direct call to the API with the same token got everything. A coach token is
+    filtered on every request.
+  - Signing in from an assistant and **Settings → AI coach → Connect** both
+    make coach tokens. They are marked **Coach only** under Devices & tokens
+    and in the admin's token list. **New token** still makes a full token, for
+    a script of your own. For API users: `POST /api/auth/tokens` takes
+    `"scope": "coach"`, token lists carry `scope`, and
+    `app.cli create-token` takes `--coach`.
+  - A coach token used for anything else shows up in the admin's auth activity
+    feed as a refused token, once per token every six hours.
+  - **Tokens you already have are not changed.** Every token from before this
+    release stays a full token, including the ones assistants hold. To swap one
+    for a coach token, revoke it under Devices & tokens and connect that
+    assistant again; Claude and ChatGPT then ask you to sign in once more.
+  - If you ever go back to 0.1.32 or older, revoke coach tokens first: an older
+    version does not know the difference and treats them as full tokens.
+
+### Changed
+
+- The page that asks you to approve an assistant now also says what it cannot
+  do, and **New token** points to Connect for assistants.
+
 ## [0.1.32] — 2026-11-27
 
 ### Fixed

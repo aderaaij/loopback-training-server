@@ -5,6 +5,7 @@ Run inside the backend container, e.g.:
     docker exec -it backend__training-api python -m app.cli list-users
     docker exec -it backend__training-api python -m app.cli create-user alice
     docker exec -it backend__training-api python -m app.cli create-token alice --name "iPhone"
+    docker exec -it backend__training-api python -m app.cli create-token alice --name "Coach · my agent" --coach
 
 `bootstrap` is invoked automatically on container start (scripts/start.sh) and
 applies BOOTSTRAP_ADMIN_PASSWORD to the admin account once, if it has none yet.
@@ -21,6 +22,7 @@ from app.database import SessionLocal
 from app.models.api_token import ApiToken
 from app.models.user import User
 from app.security import generate_token, hash_password, hash_token
+from app.token_scope import COACH, FULL
 
 
 def _prompt_password() -> str:
@@ -101,7 +103,8 @@ def cmd_create_token(args: argparse.Namespace) -> None:
         if user is None:
             sys.exit(f"No such user '{username}'.")
         raw = generate_token()
-        db.add(ApiToken(user_id=user.id, token_hash=hash_token(raw), name=args.name or ""))
+        scope = COACH if args.coach else FULL
+        db.add(ApiToken(user_id=user.id, token_hash=hash_token(raw), name=args.name or "", scope=scope))
         db.commit()
         print(f"Token for '{username}' ({args.name or 'unnamed'}) — shown once, store it now:\n\n  {raw}\n")
 
@@ -138,6 +141,10 @@ def main() -> None:
     p = sub.add_parser("create-token", help="Create an API token for a user (printed once)")
     p.add_argument("username")
     p.add_argument("--name", default="")
+    p.add_argument(
+        "--coach", action="store_true",
+        help="A token for an AI assistant: it can do what the coach's tools do and nothing else",
+    )
     p.set_defaults(func=cmd_create_token)
 
     sub.add_parser("list-users", help="List users").set_defaults(func=cmd_list_users)

@@ -18,10 +18,12 @@ half of this file, not documentation. `test_data_consent.py` asserts it stays
 exhaustive against `HealthMetricsRead`, so a metric column added without a
 domain fails a test rather than quietly escaping the filter.
 
-Scope of the boundary: this shapes what the *coach* is handed, not who may
-read the data. The athlete's own dashboard uses the same token and is
-deliberately unfiltered — consent is about disclosure to the LLM, and a
-token-holder can always call the REST API directly.
+Scope of the boundary: for a coach token (app/token_scope.py) it is enforced,
+on every request, because such a token is consent-scoped whether or not it
+sends the header below. For a full token it only shapes what the coach is
+handed: the athlete's own dashboard and phone use full tokens and are
+deliberately unfiltered, so a full token pasted into an assistant also gets
+everything on a direct call to the REST API that leaves the header out.
 """
 
 from dataclasses import dataclass
@@ -31,6 +33,7 @@ from typing import Annotated, Iterable
 from fastapi import Depends, HTTPException, Request, status
 
 from app.auth import CurrentUser
+from app.token_scope import COACH
 
 TRAINING = "training"
 RECOVERY = "recovery"
@@ -106,8 +109,10 @@ def metric_fields_for(domains: Iterable[str]) -> frozenset[str]:
 #
 # The MCP sends this header on every request it makes on the athlete's behalf,
 # centrally, so a newly added tool is filtered without anyone remembering to
-# opt it in. Its absence means "the athlete themself is asking" (the dashboard,
-# the iOS app), which is never filtered.
+# opt it in. Its absence on a full token means "the athlete themself is
+# asking" (the dashboard, the iOS app), which is never filtered. The header
+# is still what scopes the coach when it was given a full token (every token
+# from before 0.1.33, or one made under Settings, New token).
 CONSENT_SCOPE_HEADER = "X-Consent-Scope"
 
 
@@ -143,8 +148,15 @@ class ConsentScope:
 
 def get_consent_scope(request: Request, user: CurrentUser) -> ConsentScope:
     # Any non-empty value scopes the request: an unrecognised scope must not be
-    # the one that turns filtering off.
-    applied = bool(request.headers.get(CONSENT_SCOPE_HEADER, "").strip())
+    # the one that turns filtering off. A coach token (app/token_scope.py) is
+    # scoped without being asked, which is what makes the athlete's choice
+    # hold for it even on a direct call that leaves the header out.
+    # `get_current_user` has run by now (`user` depends on it) and noted the
+    # token's kind on the request.
+    applied = (
+        bool(request.headers.get(CONSENT_SCOPE_HEADER, "").strip())
+        or getattr(request.state, "token_scope", None) == COACH
+    )
     return ConsentScope(applied=applied, domains=frozenset(user.data_consent or DEFAULT_DOMAINS))
 
 
