@@ -409,8 +409,8 @@ The MCP server (`mcp/`) exposes training data to Claude via FastMCP. It talks to
     server metadata, at which point Claude switches to a second, signing client document,
     i.e. a different flow from the one that was tested.
   - **Checked with ChatGPT on 2026-11-27**, on this deployment after 0.1.32: sign-in,
-    approval and token exchange, then `initialize` and `tools/list`; no tool call from a
-    chat was seen that day. It sent `ui_locales` on the authorize request (ignored), made
+    approval and token exchange, then `initialize`, `tools/list` and a question in a chat
+    that the coach answered from `/api/workouts`. It sent `ui_locales` on the authorize request (ignored), made
     no difficulty about a token without expiry or refresh token, and opened the GET
     stream on `/mcp`, which Claude does not. Its token request came from `70.156.152.105`,
     outside Anthropic's range: an allowlist of that range would have kept it out.
