@@ -55,7 +55,8 @@ class TrainingClient:
     `COACH_ROUTES` (backend/app/token_scope.py). A call to a new endpoint
     needs a line there, or it answers 403 for everyone who signed in;
     backend/tests/test_token_scope.py compares the two by reading this file,
-    so keep calls in the form `self._request("METHOD", "/api/...")`.
+    so write each call with the method and the path as literals, the way the
+    ones below are.
     """
 
     def __init__(self) -> None:
